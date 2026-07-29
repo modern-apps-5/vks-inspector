@@ -24,14 +24,14 @@ type JUnit struct {
 func (j *JUnit) Name() string { return "junit" }
 
 type junitSuites struct {
-	XMLName xml.Name     `xml:"testsuites"`
-	Name    string       `xml:"name,attr"`
-	Tests   int          `xml:"tests,attr"`
-	Failures int         `xml:"failures,attr"`
-	Errors  int          `xml:"errors,attr"`
-	Skipped int          `xml:"skipped,attr"`
-	Time    float64      `xml:"time,attr"`
-	Suites  []junitSuite `xml:"testsuite"`
+	XMLName  xml.Name     `xml:"testsuites"`
+	Name     string       `xml:"name,attr"`
+	Tests    int          `xml:"tests,attr"`
+	Failures int          `xml:"failures,attr"`
+	Errors   int          `xml:"errors,attr"`
+	Skipped  int          `xml:"skipped,attr"`
+	Time     float64      `xml:"time,attr"`
+	Suites   []junitSuite `xml:"testsuite"`
 }
 
 type junitSuite struct {
