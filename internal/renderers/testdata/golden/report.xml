@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="vksinspect" tests="7" failures="3" errors="1" skipped="2" time="7">
+  <testsuite name="vksinspect.preflight" tests="7" failures="3" errors="1" skipped="2">
+    <testcase name="vCenter API answers and credentials authenticate" classname="vksinspect.reachability.vc.api-reachable" time="0">
+      <error message="check returned no results" type="tool-error">check returned no results</error>
+      <system-out>expected: API responds to /about&#xA;observed: check did not complete&#xA;</system-out>
+    </testcase>
+    <testcase name="No declared range overlaps another" classname="vksinspect.cidr.cidr.overlap" time="0.001">
+      <failure message="10.244.0.0/20 overlaps 10.244.0.0/16" type="blocker">expected: 10.244.0.0/20 and 10.20.0.0/16 are disjoint&#xA;observed: 10.244.0.0/20 overlaps 10.244.0.0/16&#xA;remediation: Re-plan the pod CIDR so it does not intersect the workload network. Overlapping ranges will route unpredictably and cannot be fixed after deployment without rebuilding the Supervisor.</failure>
+      <system-out>expected: 10.244.0.0/20 and 10.20.0.0/16 are disjoint&#xA;observed: 10.244.0.0/20 overlaps 10.244.0.0/16&#xA;</system-out>
+    </testcase>
+    <testcase name="Clock offset is within policy" classname="vksinspect.ntp.ntp.skew" time="0.12">
+      <failure message="offset 47s" type="warning">expected: offset within 30s&#xA;observed: offset 47s&#xA;remediation: Point the host and the declared NTP sources at the same stratum.</failure>
+      <system-out>expected: offset within 30s&#xA;observed: offset 47s&#xA;</system-out>
+    </testcase>
+    <testcase name="Declared management port is reachable" classname="vksinspect.firewall.tcp.port-open" time="5">
+      <failure message="no response — filtered, not refused" type="indeterminate">the check ran but could not determine an answer; this is not proof of health</failure>
+      <system-out>expected: TCP 443 accepts a connection&#xA;observed: no response — filtered, not refused&#xA;</system-out>
+    </testcase>
+    <testcase name="Forward DNS resolves for every declared endpoint" classname="vksinspect.dns.dns.forward" time="0.003">
+      <system-out>expected: resolves to 192.0.2.10&#xA;observed: resolved to 192.0.2.10&#xA;</system-out>
+    </testcase>
+    <testcase name="Path MTU meets the overlay minimum" classname="vksinspect.mtu.mtu.path" time="0">
+      <skipped message="requires --invasive"></skipped>
+      <system-out>expected: path MTU &gt;= 1600&#xA;observed: requires --invasive&#xA;</system-out>
+    </testcase>
+    <testcase name="Tier-0 has an up uplink with north-south reachability" classname="vksinspect.routing.nsx.tier0-uplink" time="0">
+      <skipped message="requires nsx credentials"></skipped>
+      <system-out>expected: Tier-0 has an up uplink with north-south reachability&#xA;observed: requires nsx credentials&#xA;</system-out>
+    </testcase>
+  </testsuite>
+</testsuites>

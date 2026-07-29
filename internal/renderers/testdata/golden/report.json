@@ -1,0 +1,214 @@
+{
+  "schema_version": 1,
+  "kind": "vksinspect.report/v1",
+  "tool": {
+    "name": "vksinspect",
+    "version": "0.1.0-test",
+    "commit": "deadbee"
+  },
+  "run": {
+    "mode": "preflight",
+    "topology": "nsx",
+    "config_digest": "0000000000000000000000000000000000000000000000000000000000000000",
+    "vantage": "jumphost.lab.example.com",
+    "invasive": false,
+    "started_at": "2026-03-14T09:30:00Z",
+    "finished_at": "2026-03-14T09:30:07Z",
+    "duration_ms": 7000
+  },
+  "results": [
+    {
+      "check_id": "dns.forward",
+      "requirement_ids": [
+        "COM-DNS-001"
+      ],
+      "title": "Forward DNS resolves for every declared endpoint",
+      "category": "dns",
+      "severity": "blocker",
+      "status": "pass",
+      "mode": "preflight",
+      "target": "vcenter.lab.example.com",
+      "expected": {
+        "summary": "resolves to 192.0.2.10",
+        "data": {
+          "addresses": [
+            "192.0.2.10"
+          ]
+        }
+      },
+      "observed": {
+        "summary": "resolved to 192.0.2.10",
+        "data": {
+          "addresses": [
+            "192.0.2.10"
+          ]
+        }
+      },
+      "remediation": "Add an A record for the endpoint on every declared resolver.",
+      "evidence": {
+        "resolver": "192.0.2.53",
+        "rtt_ms": 3
+      },
+      "started_at": "2026-03-14T09:30:00Z",
+      "finished_at": "2026-03-14T09:30:00Z",
+      "duration_ms": 3
+    },
+    {
+      "check_id": "cidr.overlap",
+      "requirement_ids": [
+        "COM-CID-001",
+        "COM-CID-002"
+      ],
+      "title": "No declared range overlaps another",
+      "category": "cidr",
+      "severity": "blocker",
+      "status": "fail",
+      "mode": "preflight",
+      "target": "kubernetes.podCIDRs[0] vs networks.workload[0]",
+      "expected": {
+        "summary": "10.244.0.0/20 and 10.20.0.0/16 are disjoint"
+      },
+      "observed": {
+        "summary": "10.244.0.0/20 overlaps 10.244.0.0/16",
+        "data": {
+          "overlap": "10.244.0.0/20"
+        }
+      },
+      "remediation": "Re-plan the pod CIDR so it does not intersect the workload network. Overlapping ranges will route unpredictably and cannot be fixed after deployment without rebuilding the Supervisor.",
+      "started_at": "2026-03-14T09:30:01Z",
+      "finished_at": "2026-03-14T09:30:01Z",
+      "duration_ms": 1
+    },
+    {
+      "check_id": "ntp.skew",
+      "requirement_ids": [
+        "COM-NTP-002"
+      ],
+      "title": "Clock offset is within policy",
+      "category": "ntp",
+      "severity": "warning",
+      "status": "fail",
+      "mode": "preflight",
+      "target": "192.0.2.123",
+      "expected": {
+        "summary": "offset within 30s",
+        "data": {
+          "max_skew_seconds": 30
+        }
+      },
+      "observed": {
+        "summary": "offset 47s",
+        "data": {
+          "offset_seconds": 47
+        }
+      },
+      "remediation": "Point the host and the declared NTP sources at the same stratum.",
+      "started_at": "2026-03-14T09:30:02Z",
+      "finished_at": "2026-03-14T09:30:02Z",
+      "duration_ms": 120
+    },
+    {
+      "check_id": "tcp.port-open",
+      "requirement_ids": [
+        "COM-FW-001"
+      ],
+      "title": "Declared management port is reachable",
+      "category": "firewall",
+      "severity": "blocker",
+      "status": "unknown",
+      "mode": "preflight",
+      "target": "nsx.lab.example.com:443",
+      "expected": {
+        "summary": "TCP 443 accepts a connection"
+      },
+      "observed": {
+        "summary": "no response — filtered, not refused",
+        "data": {
+          "state": "filtered"
+        }
+      },
+      "remediation": "A silent drop is a firewall, not a dead service. Confirm the path from this vantage point before treating it as a failure.",
+      "started_at": "2026-03-14T09:30:03Z",
+      "finished_at": "2026-03-14T09:30:03Z",
+      "duration_ms": 5000
+    },
+    {
+      "check_id": "nsx.tier0-uplink",
+      "requirement_ids": [
+        "NSX-T0-002"
+      ],
+      "title": "Tier-0 has an up uplink with north-south reachability",
+      "category": "routing",
+      "severity": "blocker",
+      "status": "skip",
+      "mode": "preflight",
+      "expected": {
+        "summary": "Tier-0 has an up uplink with north-south reachability"
+      },
+      "observed": {
+        "summary": "requires nsx credentials",
+        "data": {
+          "skip_reason": "requires nsx credentials"
+        }
+      },
+      "started_at": "2026-03-14T09:30:04Z",
+      "finished_at": "2026-03-14T09:30:04Z",
+      "duration_ms": 0
+    },
+    {
+      "check_id": "mtu.path",
+      "requirement_ids": [
+        "COM-MTU-001"
+      ],
+      "title": "Path MTU meets the overlay minimum",
+      "category": "mtu",
+      "severity": "blocker",
+      "status": "skip",
+      "mode": "preflight",
+      "expected": {
+        "summary": "path MTU >= 1600"
+      },
+      "observed": {
+        "summary": "requires --invasive",
+        "data": {
+          "skip_reason": "requires --invasive"
+        }
+      },
+      "started_at": "2026-03-14T09:30:05Z",
+      "finished_at": "2026-03-14T09:30:05Z",
+      "duration_ms": 0,
+      "invasive": true
+    },
+    {
+      "check_id": "vc.api-reachable",
+      "requirement_ids": [
+        "COM-API-001"
+      ],
+      "title": "vCenter API answers and credentials authenticate",
+      "category": "reachability",
+      "severity": "blocker",
+      "status": "error",
+      "mode": "preflight",
+      "expected": {
+        "summary": "API responds to /about"
+      },
+      "observed": {
+        "summary": "check did not complete"
+      },
+      "error": "check returned no results",
+      "started_at": "2026-03-14T09:30:06Z",
+      "finished_at": "2026-03-14T09:30:06Z",
+      "duration_ms": 0
+    }
+  ],
+  "summary": {
+    "total": 7,
+    "pass": 1,
+    "fail": 2,
+    "skip": 2,
+    "unknown": 1,
+    "errors": 1,
+    "blockers": 1,
+    "warnings": 1
+  }
+}

@@ -1,0 +1,52 @@
+vksinspect  0.1.0-test
+  mode      preflight
+  topology  nsx
+  vantage   jumphost.lab.example.com
+  probes    read-only (non-invasive)
+
+ERROR vCenter API answers and credentials authenticate
+      check     vc.api-reachable  (COM-API-001)
+      error     check returned no results
+
+BLOCK No declared range overlaps another  [kubernetes.podCIDRs[0] vs networks.workload[0]]
+      check     cidr.overlap  (COM-CID-001, COM-CID-002)
+      expected  10.244.0.0/20 and 10.20.0.0/16 are disjoint
+      observed  10.244.0.0/20 overlaps 10.244.0.0/16
+      fix       Re-plan the pod CIDR so it does not intersect the workload
+                network. Overlapping ranges will route unpredictably and
+                cannot be fixed after deployment without rebuilding the
+                Supervisor.
+
+WARN  Clock offset is within policy  [192.0.2.123]
+      check     ntp.skew  (COM-NTP-002)
+      expected  offset within 30s
+      observed  offset 47s
+      fix       Point the host and the declared NTP sources at the same
+                stratum.
+
+UNKWN Declared management port is reachable  [nsx.lab.example.com:443]
+      check     tcp.port-open  (COM-FW-001)
+      expected  TCP 443 accepts a connection
+      observed  no response — filtered, not refused
+      fix       A silent drop is a firewall, not a dead service. Confirm the
+                path from this vantage point before treating it as a failure.
+
+PASS  Forward DNS resolves for every declared endpoint  [vcenter.lab.example.com]
+      check     dns.forward  (COM-DNS-001)
+      expected  resolves to 192.0.2.10
+      observed  resolved to 192.0.2.10
+      · resolver 192.0.2.53
+      · rtt_ms  3
+
+SKIP  Path MTU meets the overlay minimum
+      check     mtu.path  (COM-MTU-001)
+      skipped   requires --invasive
+
+SKIP  Tier-0 has an up uplink with north-south reachability
+      check     nsx.tier0-uplink  (NSX-T0-002)
+      skipped   requires nsx credentials
+
+
+summary  7 checks: 1 passed, 2 failed, 2 skipped, 1 indeterminate, 1 errors
+          tool error — results are incomplete
+          exit code 3 (tool error)
