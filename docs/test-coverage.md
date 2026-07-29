@@ -1,5 +1,5 @@
 
-VKS Inspector project aims to quickly indentify common misconfigurations and errors in any VKS environment.  The team is constantly incorporating field feedback to enhance the test coverage. Please open a Gitlab Issue with a FR to add a test that is missing.
+
 
 ## Test Coverage
   ### 
