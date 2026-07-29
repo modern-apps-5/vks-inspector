@@ -1,6 +1,6 @@
 vksinspect  0.1.0-test
   mode      preflight
-  topology  nsx
+  topology  nsx+nsx-lb
   vantage   jumphost.lab.example.com
   probes    read-only (non-invasive)
 

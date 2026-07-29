@@ -132,6 +132,18 @@ func (t *Terminal) renderSummary(bw *errWriter, rep *results.Report) {
 	bw.printf("%s  %d checks: %d passed, %d failed, %d skipped, %d indeterminate, %d errors\n",
 		t.paint(cBold, "summary"), s.Total, s.Pass, s.Fail, s.Skip, s.Unknown, s.Errors)
 
+	// A run in which nothing actually executed must not read as a clean bill of
+	// health. "No blockers" is technically true and deeply misleading when the
+	// reason is that no check ran — a narrow --layer or --only, or credentials
+	// that were never supplied.
+	if s.Total > 0 && s.Pass == 0 && s.Fail == 0 && s.Unknown == 0 && s.Errors == 0 {
+		bw.printf("          %s\n", t.paint(cYellow,
+			"every check was skipped — this run inspected nothing and is not evidence of readiness"))
+		bw.printf("          exit code %d (%s)\n",
+			results.ExitCode(rep.Results), results.ExitCodeText(results.ExitCode(rep.Results)))
+		return
+	}
+
 	switch code := results.ExitCode(rep.Results); code {
 	case results.ExitPass:
 		bw.printf("          %s\n", t.paint(cGreen, "no blockers, no warnings"))
