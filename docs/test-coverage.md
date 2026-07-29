@@ -3,7 +3,9 @@ VKS Inspector project aims to quickly indentify common misconfigurations and err
 
 ## Test Coverage
   ### 
-  - [ ] DNS forward and reverse resolution should work for vCenter and NSX Manager.
+  - [ ] DNS forward and reverse resolution
+     - [ ] vCenter
+     - [ ] NSX Manager
   - [ ] MTU Checker for VPC based Supervisor deployments
   - [ ] Duplicate IP Validation
   - [ ] Ping/curl vCenter
