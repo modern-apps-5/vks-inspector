@@ -150,6 +150,16 @@ func fixtureReport() *results.Report {
 			StartedAt:    at(0),
 			FinishedAt:   at(7),
 			DurationMS:   7000,
+			// 7 checks known, 2 skipped, so 5 executed: one config-only, three
+			// network probes, one API check. This run did reach the environment.
+			Coverage: results.Coverage{
+				ChecksInBuild:        7,
+				Executed:             5,
+				ConfigOnly:           1,
+				NetworkProbes:        3,
+				APIChecks:            1,
+				EnvironmentContacted: true,
+			},
 		},
 		res,
 	)
@@ -271,6 +281,44 @@ func TestJSONNeverHidesSkips(t *testing.T) {
 	}
 	if !bytes.Contains(buf.Bytes(), []byte(`"status": "skip"`)) {
 		t.Error("JSON output omitted skipped results; a JSON consumer cannot distinguish pass from never-ran")
+	}
+}
+
+// The complaint this guards against: a run of pure config arithmetic reported
+// "4 passed, 0 failed / all checks passed", which reads as a readiness verdict
+// when nothing had touched the environment. The report must say so next to the
+// verdict, not in a footnote.
+func TestRunThatContactedNothingSaysSo(t *testing.T) {
+	rep := fixtureReport()
+	rep.Run.Coverage = results.Coverage{
+		ChecksInBuild: 5, Executed: 5, ConfigOnly: 5, EnvironmentContacted: false,
+	}
+
+	r, err := renderers.New("terminal", renderers.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	if err := r.Render(&buf, rep); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, want := range []string{
+		"NOTHING IN THIS RUN CONTACTED YOUR ENVIRONMENT",
+		"No packet was sent",
+		"does NOT mean the environment is ready",
+	} {
+		if !bytes.Contains(buf.Bytes(), []byte(want)) {
+			t.Errorf("report omits %q — a config-only run reads as a readiness verdict\n%s", want, buf.String())
+		}
+	}
+}
+
+// The exit-code text must not overclaim either. A run that skipped most of its
+// checks did not have "all checks pass".
+func TestPassTextDoesNotClaimFullCoverage(t *testing.T) {
+	if got := results.ExitCodeText(results.ExitPass); bytes.Contains([]byte(got), []byte("all checks")) {
+		t.Errorf("ExitCodeText(0) = %q; must not imply every check ran", got)
 	}
 }
 

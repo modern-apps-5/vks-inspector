@@ -95,6 +95,18 @@ unverified), `docs/CHECK-TAXONOMY.md`, `docs/test-coverage.md`, and 14 ADRs.
 
 ### Fixed
 
+- **The report read as a readiness verdict for work it had not done.** A run of
+  pure config arithmetic printed "4 passed, 0 failed / all checks passed" with
+  nothing to indicate that no packet had been sent and no API called. Reports
+  now carry a `coverage` block and state, next to the verdict, when nothing in
+  the run contacted the environment. The all-clear text changed from "all checks
+  passed" to "the declared configuration is internally consistent / the
+  environment itself has not been inspected", and `ExitCodeText(0)` from "all
+  checks passed" to "no check failed" — a run that skipped most of its checks
+  never had full coverage.
+- **`--vcenter` was accepted and silently never used.** Supplying an endpoint
+  the tool cannot yet contact now warns at the point it is supplied.
+
 - **An "optional" prompt refused an empty answer.** The external-networks
   question said "leave empty to skip" and then rejected empty as `required`,
   stranding the operator with no way past it. `AskListOptional` is now a

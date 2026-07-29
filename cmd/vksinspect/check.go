@@ -54,6 +54,18 @@ func runMode(cmd *cobra.Command, g *globalOpts, mode checks.Mode) error {
 		return err
 	}
 
+	// Accepting an endpoint and never connecting to it is its own kind of lie.
+	// Until the management-plane clients exist, say so at the point the operator
+	// supplied the address, not only in the report footer.
+	if cfg.Infrastructure.VCenter.FQDN != "" {
+		fmt.Fprintf(os.Stderr,
+			"\n  ⚠ %s was accepted but NOT contacted.\n"+
+				"    The vCenter, NSX and ALB clients are not implemented yet, so every\n"+
+				"    check that would inspect them reports as skipped. This run grades the\n"+
+				"    addressing you declared and nothing else.\n\n",
+			cfg.Infrastructure.VCenter.FQDN)
+	}
+
 	rep, err := engine.Run(cmd.Context(), all.Registry(), engine.Options{
 		Mode:     mode,
 		Config:   cfg,

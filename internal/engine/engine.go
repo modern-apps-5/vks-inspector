@@ -94,6 +94,8 @@ func Run(ctx context.Context, reg *registry.Registry, opts Options) (*results.Re
 	})
 
 	var out []results.Result
+	cov := results.Coverage{ChecksInBuild: reg.Len()}
+
 	for _, d := range decisions {
 		m := d.Check.Meta()
 
@@ -104,6 +106,18 @@ func Run(ctx context.Context, reg *registry.Registry, opts Options) (*results.Re
 		if missing := rc.Missing(m.Needs); len(missing) > 0 {
 			out = append(out, skipResult(m, rc, missingReason(missing)))
 			continue
+		}
+
+		cov.Executed++
+		switch {
+		case needsAny(m.Needs, checks.CapVCenter, checks.CapNSX, checks.CapALB, checks.CapSupervisor):
+			cov.APIChecks++
+			cov.EnvironmentContacted = true
+		case needsAny(m.Needs, checks.CapNetwork):
+			cov.NetworkProbes++
+			cov.EnvironmentContacted = true
+		default:
+			cov.ConfigOnly++
 		}
 
 		out = append(out, runOne(ctx, d.Check, rc, opts.Timeout)...)
@@ -128,6 +142,7 @@ func Run(ctx context.Context, reg *registry.Registry, opts Options) (*results.Re
 		ConfigDigest: opts.Config.Digest(),
 		Vantage:      vantage,
 		Placeholder:  opts.Config.FromPlaceholders(),
+		Coverage:     cov,
 		Invasive:     rc.Invasive,
 		StartedAt:    started,
 		FinishedAt:   finished,
@@ -191,6 +206,17 @@ func skipResult(m checks.Meta, rc *checks.RunContext, reason string) results.Res
 	r.Expected = results.Text(m.Title)
 	checks.Finish(rc, &r)
 	return r
+}
+
+func needsAny(needs []checks.Capability, want ...checks.Capability) bool {
+	for _, n := range needs {
+		for _, w := range want {
+			if n == w {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func layerOrBoth(l results.Layer) results.Layer {

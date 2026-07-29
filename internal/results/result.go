@@ -218,11 +218,35 @@ type RunInfo struct {
 	// Placeholder marks a run graded against example answers rather than a real
 	// environment. It rides in the report so a shared screenshot or a stored
 	// baseline carries the caveat, not just the terminal session that made it.
-	Placeholder bool      `json:"placeholder_answers,omitempty"`
-	Invasive    bool      `json:"invasive"`
-	StartedAt   time.Time `json:"started_at"`
-	FinishedAt  time.Time `json:"finished_at"`
-	DurationMS  int64     `json:"duration_ms"`
+	Placeholder bool `json:"placeholder_answers,omitempty"`
+	// Coverage records what this run was capable of inspecting.
+	Coverage   Coverage  `json:"coverage"`
+	Invasive   bool      `json:"invasive"`
+	StartedAt  time.Time `json:"started_at"`
+	FinishedAt time.Time `json:"finished_at"`
+	DurationMS int64     `json:"duration_ms"`
+}
+
+// Coverage records what a run was actually capable of inspecting.
+//
+// It exists because "4 passed, 0 failed" is not the same claim as "this
+// environment is ready", and a report that does not distinguish them invites
+// the reader to assume the stronger one. A run of config-arithmetic checks that
+// never opened a socket must say so where the verdict is.
+type Coverage struct {
+	// ChecksInBuild is how many checks this binary knows about at all.
+	ChecksInBuild int `json:"checks_in_build"`
+	// Executed is how many actually ran (not skipped).
+	Executed int `json:"executed"`
+	// ConfigOnly, NetworkProbes and APIChecks partition Executed by what each
+	// check needed in order to observe anything.
+	ConfigOnly    int `json:"config_only"`
+	NetworkProbes int `json:"network_probes"`
+	APIChecks     int `json:"api_checks"`
+	// EnvironmentContacted reports whether anything in this run actually
+	// touched the target environment — a packet sent or an API call made.
+	// False means the run graded declared intent and nothing else.
+	EnvironmentContacted bool `json:"environment_contacted"`
 }
 
 // Summary is the roll-up. Renderers display it; the exit code is derived from

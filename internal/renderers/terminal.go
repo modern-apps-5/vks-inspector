@@ -130,8 +130,32 @@ func (t *Terminal) renderResult(bw *errWriter, r results.Result) {
 	bw.printf("\n")
 }
 
+// renderCoverage states what the run was capable of inspecting.
+//
+// This sits immediately above the verdict on purpose. "4 passed, 0 failed" and
+// "this environment is ready" are different claims, and a reader who is handed
+// only the first will assume the second. A run that never opened a socket has
+// to say so next to its own green tick, not in a footnote.
+func (t *Terminal) renderCoverage(bw *errWriter, rep *results.Report) {
+	c := rep.Run.Coverage
+
+	if !c.EnvironmentContacted {
+		bw.printf("%s\n", t.paint(cYellow,
+			"NOTHING IN THIS RUN CONTACTED YOUR ENVIRONMENT."))
+		bw.printf("         %d config-only check(s) graded the addressing you declared.\n", c.ConfigOnly)
+		bw.printf("         No packet was sent. No management-plane API was called.\n")
+		bw.printf("         %s\n\n", t.paint(cYellow,
+			"A pass here does NOT mean the environment is ready."))
+		return
+	}
+
+	bw.printf("checks    %d ran of %d in this build — %d config-only, %d network probe(s), %d API check(s)\n\n",
+		c.Executed, c.ChecksInBuild, c.ConfigOnly, c.NetworkProbes, c.APIChecks)
+}
+
 func (t *Terminal) renderSummary(bw *errWriter, rep *results.Report) {
 	s := rep.Summary
+	t.renderCoverage(bw, rep)
 	bw.printf("%s  %d checks: %d passed, %d failed, %d skipped, %d indeterminate, %d errors\n",
 		t.paint(cBold, "summary"), s.Total, s.Pass, s.Fail, s.Skip, s.Unknown, s.Errors)
 
@@ -156,7 +180,16 @@ func (t *Terminal) renderSummary(bw *errWriter, rep *results.Report) {
 
 	switch code := results.ExitCode(rep.Results); code {
 	case results.ExitPass:
-		bw.printf("          %s\n", t.paint(cGreen, "no blockers, no warnings"))
+		if !rep.Run.Coverage.EnvironmentContacted {
+			// "all checks passed" is true and misleading in the same breath
+			// when the checks were arithmetic. Say what passed.
+			bw.printf("          %s\n", t.paint(cGreen,
+				"the declared configuration is internally consistent"))
+			bw.printf("          %s\n", t.paint(cGrey,
+				"the environment itself has not been inspected"))
+		} else {
+			bw.printf("          %s\n", t.paint(cGreen, "no blockers, no warnings"))
+		}
 	case results.ExitBlocker:
 		bw.printf("          %s\n", t.paint(cRed, fmt.Sprintf("%d blocker(s) must be fixed before deployment", s.Blockers)))
 	case results.ExitWarning:

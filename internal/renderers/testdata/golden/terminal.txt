@@ -37,6 +37,8 @@ PASS  Forward DNS resolves for every declared endpoint  [vcenter.lab.example.com
       observed  resolved to 192.0.2.10
 
 
+checks    5 ran of 7 in this build — 1 config-only, 3 network probe(s), 1 API check(s)
+
 summary  7 checks: 1 passed, 2 failed, 2 skipped, 1 indeterminate, 1 errors
           tool error — results are incomplete
           2 check(s) skipped and not shown; re-run with --show-skipped

@@ -48,7 +48,10 @@ func ExitCode(res []Result) int {
 func ExitCodeText(code int) string {
 	switch code {
 	case ExitPass:
-		return "all checks passed"
+		// Not "all checks passed": a run may have skipped most of its checks,
+		// or run only config arithmetic. This states the contract — nothing
+		// failed — without implying coverage the run may not have had.
+		return "no check failed"
 	case ExitBlocker:
 		return "one or more blockers failed"
 	case ExitWarning:

@@ -32,7 +32,9 @@ calls.
 > 46 of whose 89 rows are flagged as unconfirmed against current VCF 9 / VKS
 > documentation.
 >
-> **Do not read a passing run as a validated environment.**
+> **Do not read a passing run as a validated environment.** The tool says so
+> itself: a run that contacts nothing prints `NOTHING IN THIS RUN CONTACTED YOUR
+> ENVIRONMENT` above its own verdict.
 
 ---
 

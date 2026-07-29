@@ -47,6 +47,8 @@ SKIP  Tier-0 has an up uplink with north-south reachability
       skipped   requires nsx credentials
 
 
+checks    5 ran of 7 in this build — 1 config-only, 3 network probe(s), 1 API check(s)
+
 summary  7 checks: 1 passed, 2 failed, 2 skipped, 1 indeterminate, 1 errors
           tool error — results are incomplete
           exit code 3 (tool error)
