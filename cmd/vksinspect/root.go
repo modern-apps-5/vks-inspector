@@ -38,6 +38,7 @@ type globalOpts struct {
 	only           []string
 	skip           []string
 	timeout        time.Duration
+	probeTimeout   time.Duration
 }
 
 func (g *globalOpts) bind(cmd *cobra.Command) {
@@ -62,7 +63,10 @@ func (g *globalOpts) bind(cmd *cobra.Command) {
 		"permit probes that may disturb the network (e.g. path-MTU discovery). Off by default; every invasive check is documented as such in docs/REQUIREMENTS-MATRIX.md")
 	f.StringSliceVar(&g.only, "only", nil, "run only these check IDs, namespaces or categories")
 	f.StringSliceVar(&g.skip, "skip", nil, "skip these check IDs, namespaces or categories")
-	f.DurationVar(&g.timeout, "timeout", 60*time.Second, "per-check timeout")
+	f.DurationVar(&g.timeout, "timeout", 60*time.Second,
+		"per-check timeout — bounds a whole check, which may fan out over many targets")
+	f.DurationVar(&g.probeTimeout, "probe-timeout", 5*time.Second,
+		"per-probe timeout — bounds one DNS lookup, TCP connect or NTP query")
 }
 
 // resolveLayer validates --layer. Done once, up front, so an invalid value

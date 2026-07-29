@@ -51,6 +51,21 @@ version, datacenters, clusters, hosts, distributed switches, portgroups, and any
 registered NSX Manager. Discovered values pre-fill the question flow and are
 reported rather than asked; a discovered value never overwrites a declared one.
 
+**Credential prompting.** If no credentials are found, the tool asks — username
+plainly, password with terminal echo disabled — and offers to save them to
+`~/.vksinspect/credentials.yaml` at mode 0600. Saving is opt-in; writing
+someone's password to disk without asking is not a decision this tool makes for
+them. Refuses to read a password from a non-terminal, where it would be
+invisible to the person running the command. The secret still never reaches the
+config, a report or a baseline. This supersedes ADR-0013's "never prompt for a
+password" — the rules that protect the secret are unchanged.
+
+**Probe memoisation and concurrency.** Several checks legitimately need the same
+observation (`dns.forward` and `dns.resolver-agreement` resolve the same names;
+`tls.chain` and `tls.expiry` inspect the same certificates), and fan-outs now
+run with bounded concurrency. A run against unreachable endpoints went from over
+two minutes to twenty seconds.
+
 **Network probes.** DNS (forward, reverse, cross-resolver agreement), TCP
 tri-state connect, TLS chain inspection and expiry, and real SNTP. Confined to
 `internal/probes` behind an interface, so the whole class-(a) suite is testable
@@ -149,6 +164,12 @@ unverified), `docs/CHECK-TAXONOMY.md`, `docs/test-coverage.md`, and 14 ADRs.
   every re-run asked again — defeating the point of `--save-config`. `nil` now
   means "never asked" and `[]` means "asked, answer was none", and the empty
   list survives a YAML round trip.
+- **A separate `--probe-timeout`.** The per-check timeout (60s) was being used
+  to bound individual probes, so one DNS lookup could block for a minute.
+  Probes now default to 5s; `--timeout` still bounds a whole check.
+- **`--credentials` pointing at a file that does not exist yet was fatal** —
+  which is exactly the state before the first save. Absent is now treated as
+  empty, with a note naming the file so a typo'd path is still visible.
 - A network's own static range was reported as colliding with its own subnet.
   Containment there is required, not a conflict; the check now excludes
   parent/child pairs and `range.containment` asserts the containment separately.

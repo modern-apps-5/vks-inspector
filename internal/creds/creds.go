@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -61,6 +62,12 @@ func (c Credential) MarshalJSON() ([]byte, error) {
 // ("vcenter", "nsx", "alb", "haproxy", or a custom credentialRef from config).
 type Set struct {
 	byRef map[string]Credential
+
+	// MissingFile records that a credentials path was given but does not exist
+	// yet. Not an error — that is the normal state before the first save — but
+	// it is also what a typo'd path looks like, so the caller says so rather
+	// than leaving the operator to infer it from a page of skips.
+	MissingFile string
 }
 
 // Keys returns the available credential references, sorted. Safe to log — these
@@ -119,6 +126,12 @@ func Load(path string) (*Set, error) {
 
 func (s *Set) loadFile(path string) error {
 	info, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		// Absent is the normal state before anything has been saved. Refusing
+		// here would make --credentials unusable for the very first run.
+		s.MissingFile = path
+		return nil
+	}
 	if err != nil {
 		return fmt.Errorf("credentials file: %w", err)
 	}
@@ -181,4 +194,82 @@ func lastCut(s, sep string) (before, after string, found bool) {
 		return s, "", false
 	}
 	return s[:i], s[i+len(sep):], true
+}
+
+// Put adds or replaces a credential in the set.
+func (s *Set) Put(ref string, c Credential) {
+	if s.byRef == nil {
+		s.byRef = map[string]Credential{}
+	}
+	s.byRef[strings.ToLower(ref)] = c
+}
+
+// DefaultPath is where credentials are stored when the operator does not choose.
+//
+// Under the user's home directory rather than beside the config, so a
+// credentials file is never accidentally committed alongside a config that is
+// meant to be shared.
+func DefaultPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("locate home directory: %w", err)
+	}
+	return filepath.Join(home, ".vksinspect", "credentials.yaml"), nil
+}
+
+// Save writes the set to a credentials file at mode 0600.
+//
+// Merges rather than overwrites: a file may hold credentials for several
+// environments, and saving a new vCenter password must not silently delete an
+// NSX one. The 0600 mode is enforced on write as well as on read, so a file
+// this tool created can always be read back by it.
+func (s *Set) Save(path string) error {
+	if path == "" {
+		return errors.New("no credentials path given")
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return fmt.Errorf("create credentials directory: %w", err)
+	}
+
+	merged := map[string]Credential{}
+	if existing, err := Load(path); err == nil {
+		for _, k := range existing.Keys() {
+			if c, ok := existing.Get(k); ok {
+				merged[k] = c
+			}
+		}
+	}
+	for _, k := range s.Keys() {
+		if c, ok := s.Get(k); ok {
+			merged[k] = c
+		}
+	}
+
+	blob, err := yaml.Marshal(file{
+		APIVersion:  "vksinspect/v1alpha1",
+		Kind:        "Credentials",
+		Credentials: merged,
+	})
+	if err != nil {
+		return fmt.Errorf("serialise credentials: %w", err)
+	}
+
+	// Create with 0600 from the outset. Writing then chmod-ing leaves a window
+	// in which the secret is world-readable.
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	if err != nil {
+		return fmt.Errorf("open credentials file: %w", err)
+	}
+	defer func() { _ = f.Close() }()
+
+	header := "# vksinspect credentials. Mode 0600 — the tool refuses to read it otherwise.\n" +
+		"# Never commit this file. Values here are also settable as " + EnvPrefix + "* environment\n" +
+		"# variables, which take precedence over anything written here.\n"
+	if _, err := f.WriteString(header); err != nil {
+		return fmt.Errorf("write credentials file: %w", err)
+	}
+	if _, err := f.Write(blob); err != nil {
+		return fmt.Errorf("write credentials file: %w", err)
+	}
+	return f.Chmod(0o600)
 }

@@ -24,7 +24,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strings"
+
+	"golang.org/x/term"
 )
 
 // ErrNonInteractive is returned when input is needed but prompting is disabled.
@@ -400,3 +403,40 @@ func splitList(s string) []string {
 }
 
 func itoa(n int) string { return fmt.Sprintf("%d", n) }
+
+// Password reads a secret with terminal echo disabled.
+//
+// ADR-0013 originally said this package would never read a password. That was
+// overridden deliberately: an operator with a vCenter in front of them should
+// not have to go and set an environment variable before the tool will look at
+// it. The rules that actually protect the secret are unchanged — it never
+// enters the config, never reaches a report or baseline, and is written only to
+// a 0600 credentials file the operator explicitly agrees to.
+//
+// Echo is disabled via the terminal directly. If stdin is not a terminal there
+// is nothing to disable, and reading a secret from a pipe would be invisible to
+// the person running the command, so it is refused instead.
+func (p *Prompter) Password(question string) (string, error) {
+	if !p.Interactive {
+		return "", fmt.Errorf("%w: %s", ErrNonInteractive, question)
+	}
+	fd := int(os.Stdin.Fd())
+	if !term.IsTerminal(fd) {
+		return "", fmt.Errorf("%w: refusing to read a password from a non-terminal; "+
+			"set %sVCENTER_PASSWORD instead", ErrNonInteractive, "VKSINSPECT_")
+	}
+
+	p.flushSection()
+	for {
+		fmt.Fprintf(p.out, "  %s: ", question)
+		raw, err := term.ReadPassword(fd)
+		fmt.Fprintln(p.out) // ReadPassword swallows the newline the user typed
+		if err != nil {
+			return "", fmt.Errorf("read password: %w", err)
+		}
+		if s := strings.TrimSpace(string(raw)); s != "" {
+			return s, nil
+		}
+		fmt.Fprintf(p.out, "     required\n")
+	}
+}

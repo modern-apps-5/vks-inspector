@@ -109,3 +109,78 @@ func writeCredsFile(t *testing.T, path, content string) {
 		t.Fatal(err)
 	}
 }
+
+// Saving must merge, not overwrite: a file may hold credentials for several
+// systems, and storing a new vCenter password must not silently delete the NSX
+// one.
+func TestSaveMergesAndEnforcesMode(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "creds.yaml")
+
+	first, err := creds.Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	first.Put("nsx", creds.Credential{Username: "nsx-ro", Password: "nsx-pw"})
+	if err := first.Save(path); err != nil {
+		t.Fatalf("first save: %v", err)
+	}
+
+	second, err := creds.Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second.Put("vcenter", creds.Credential{Username: "vc-ro", Password: "vc-pw"})
+	if err := second.Save(path); err != nil {
+		t.Fatalf("second save: %v", err)
+	}
+
+	// Both must survive.
+	back, err := creds.Load(path)
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	for ref, wantUser := range map[string]string{"nsx": "nsx-ro", "vcenter": "vc-ro"} {
+		got, ok := back.Get(ref)
+		if !ok {
+			t.Errorf("%s credential lost on save", ref)
+			continue
+		}
+		if got.Username != wantUser {
+			t.Errorf("%s username = %q, want %q", ref, got.Username, wantUser)
+		}
+	}
+
+	// Written at 0600 from the outset — the loader refuses anything looser, so
+	// a file this tool created must always be readable by it.
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if perm := info.Mode().Perm(); perm != 0o600 {
+		t.Errorf("mode = %04o, want 0600", perm)
+	}
+}
+
+// The saved file must round-trip through the loader that enforces permissions.
+func TestSavedFileIsReadableByTheLoader(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "creds.yaml")
+
+	set, err := creds.Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	set.Put("vcenter", creds.Credential{Username: "u", Password: "p"})
+	if err := set.Save(path); err != nil {
+		t.Fatal(err)
+	}
+
+	back, err := creds.Load(path)
+	if err != nil {
+		t.Fatalf("the loader rejected a file this package wrote: %v", err)
+	}
+	got, ok := back.Get("vcenter")
+	if !ok || got.Password != "p" {
+		t.Errorf("credential did not round-trip: %+v", got)
+	}
+}

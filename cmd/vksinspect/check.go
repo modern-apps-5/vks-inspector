@@ -70,12 +70,16 @@ func runMode(cmd *cobra.Command, g *globalOpts, mode checks.Mode) error {
 	}()
 
 	rep, err := engine.Run(cmd.Context(), all.Registry(), engine.Options{
-		Mode:     mode,
-		Config:   cfg,
-		Creds:    credSet,
-		Layer:    g.layer,
-		Clients:  clientSet,
-		Probes:   probes.System{Timeout: g.timeout},
+		Mode:    mode,
+		Config:  cfg,
+		Creds:   credSet,
+		Layer:   g.layer,
+		Clients: clientSet,
+		// Memoised: several checks legitimately need the same observation
+		// (dns.forward and dns.resolver-agreement resolve the same names;
+		// tls.chain and tls.expiry inspect the same certificates). Without
+		// this a run probes every target twice.
+		Probes:   probes.NewMemo(probes.System{Timeout: g.probeTimeout}),
 		Invasive: g.invasive,
 		Only:     g.only,
 		Skip:     g.skip,
@@ -106,13 +110,25 @@ func (g *globalOpts) buildClients(ctx context.Context, cfg *config.Config, credS
 	if ref == "" {
 		ref = "vcenter"
 	}
+	if credSet.MissingFile != "" {
+		// Absent is normal before the first save, but it is also what a typo'd
+		// path looks like. Say which file, so the operator can tell.
+		fmt.Fprintf(os.Stderr, "\n  note: %s does not exist yet\n", credSet.MissingFile)
+	}
 	cred, ok := credSet.Get(ref)
 	if !ok {
-		fmt.Fprintf(os.Stderr,
-			"\n  ⚠ no credentials for %s — vCenter checks will be skipped.\n"+
-				"    Set %sVCENTER_USERNAME and %sVCENTER_PASSWORD, or pass --credentials.\n\n",
-			endpoint, creds.EnvPrefix, creds.EnvPrefix)
-		return set, closers
+		// Ask rather than refuse. An operator with a vCenter in front of them
+		// should not have to go and set an environment variable before the tool
+		// will look at it.
+		asked, err := g.askForCredentials(endpoint, ref, credSet)
+		if err != nil {
+			fmt.Fprintf(os.Stderr,
+				"\n  ⚠ no credentials for %s — vCenter checks will be skipped.\n"+
+					"    Set %sVCENTER_USERNAME and %sVCENTER_PASSWORD, or pass --credentials.\n\n",
+				endpoint, creds.EnvPrefix, creds.EnvPrefix)
+			return set, closers
+		}
+		cred = asked
 	}
 
 	opts := clients.DefaultOptions()
@@ -131,6 +147,57 @@ func (g *globalOpts) buildClients(ctx context.Context, cfg *config.Config, credS
 	set.VCenter = c
 	closers = append(closers, c.Close)
 	return set, closers
+}
+
+// askForCredentials prompts for a username and password, and offers to save
+// them.
+//
+// The secret never enters the config, never reaches a report or a baseline, and
+// is written only to a 0600 file the operator explicitly agrees to. Saving is
+// opt-in: writing someone's password to disk without asking is not a decision
+// this tool gets to make for them.
+func (g *globalOpts) askForCredentials(endpoint, ref string, set *creds.Set) (creds.Credential, error) {
+	if g.nonInteractive || !isTTY(os.Stdin) {
+		return creds.Credential{}, fmt.Errorf("cannot prompt for credentials")
+	}
+
+	p := prompt.New(os.Stdin, os.Stderr, true)
+	p.Section("Credentials for " + endpoint)
+	p.Info("Not found in the environment or a credentials file.")
+	p.Info("A read-only account is enough — this tool performs no writes.")
+
+	user, err := p.Ask("Username", "readonly@vsphere.local", "", nil)
+	if err != nil {
+		return creds.Credential{}, err
+	}
+	pass, err := p.Password("Password (not echoed)")
+	if err != nil {
+		return creds.Credential{}, err
+	}
+
+	cred := creds.Credential{Username: user, Password: pass}
+	set.Put(ref, cred)
+
+	save, err := p.Confirm("Save these credentials for next time?", true)
+	if err != nil || !save {
+		return cred, nil
+	}
+
+	path := g.credsPath
+	if path == "" {
+		if path, err = creds.DefaultPath(); err != nil {
+			p.Info("could not work out where to save: %v", err)
+			return cred, nil
+		}
+	}
+	if err := set.Save(path); err != nil {
+		// Failing to save must not lose the credentials for this run.
+		p.Info("could not save: %v", err)
+		return cred, nil
+	}
+	p.Info("saved to %s (mode 0600)", path)
+	p.Info("Re-runs will pick it up automatically. Never commit that file.")
+	return cred, nil
 }
 
 // resolveConfig assembles the config from every source, in precedence order:

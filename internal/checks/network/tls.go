@@ -48,10 +48,7 @@ func (c TLSChain) Run(ctx context.Context, rc *checks.RunContext) ([]results.Res
 		return []results.Result{skip(c.Meta(), rc, "no endpoints declared")}, nil
 	}
 
-	var failures []results.Result
-	inspected := 0
-
-	for _, ep := range eps {
+	all := mapConcurrent(ctx, eps, func(ctx context.Context, ep endpoint) results.Result {
 		ans := rc.Probes.InspectTLS(ctx, ep.Address(), ep.Name, nil)
 
 		r := checks.NewResult(c.Meta(), rc, ep.Address())
@@ -73,11 +70,9 @@ func (c TLSChain) Run(ctx context.Context, rc *checks.RunContext) ([]results.Res
 				Data:    map[string]any{"error": ans.Err.Error()},
 			}
 			checks.Finish(rc, &r)
-			failures = append(failures, r)
-			continue
+			return r
 		}
 
-		inspected++
 		leaf := ans.Leaf()
 		r.Observed = results.Value{
 			Data: map[string]any{
@@ -116,6 +111,15 @@ func (c TLSChain) Run(ctx context.Context, rc *checks.RunContext) ([]results.Res
 		}
 
 		checks.Finish(rc, &r)
+		return r
+	})
+
+	var failures []results.Result
+	inspected := 0
+	for _, r := range all {
+		if r.Observed.Data["verified"] != nil {
+			inspected++
+		}
 		if r.Status != results.StatusPass {
 			failures = append(failures, r)
 		}

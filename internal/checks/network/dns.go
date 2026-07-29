@@ -45,68 +45,82 @@ func (c Forward) Run(ctx context.Context, rc *checks.RunContext) ([]results.Resu
 	}
 	servers := resolvers(rc.Config)
 
-	var failures []results.Result
-	checked := 0
-
+	// One work item per (name, resolver) pair, probed concurrently. Sequential
+	// lookups at a five-second timeout make an operator wait minutes for a
+	// check that can finish in seconds.
+	type job struct {
+		target namedTarget
+		server string
+	}
+	var jobs []job
 	for _, t := range targets {
 		for _, server := range servers {
-			checked++
-			ans := rc.Probes.LookupHost(ctx, t.Name, server)
+			jobs = append(jobs, job{target: t, server: server})
+		}
+	}
 
-			r := checks.NewResult(c.Meta(), rc, t.Name+" via "+resolverLabel(server))
-			r.Expected = results.Value{
-				Summary: expectedSummary(t),
-				Data:    map[string]any{"name": t.Name, "resolver": resolverLabel(server), "expected_ip": t.ExpectIP},
+	all := mapConcurrent(ctx, jobs, func(ctx context.Context, j job) results.Result {
+		t, server := j.target, j.server
+		ans := rc.Probes.LookupHost(ctx, t.Name, server)
+
+		r := checks.NewResult(c.Meta(), rc, t.Name+" via "+resolverLabel(server))
+		r.Expected = results.Value{
+			Summary: expectedSummary(t),
+			Data:    map[string]any{"name": t.Name, "resolver": resolverLabel(server), "expected_ip": t.ExpectIP},
+		}
+
+		switch {
+		case ans.Timeout:
+			// Silence is not a NXDOMAIN. We did not observe a missing record,
+			// so we do not assert one.
+			r.Status = results.StatusUnknown
+			r.Observed = results.Value{
+				Summary: fmt.Sprintf("%s did not answer for %s within the timeout", resolverLabel(server), t.Name),
+				Data:    map[string]any{"resolved": nil, "timeout": true},
 			}
-
-			switch {
-			case ans.Timeout:
-				// Silence is not a NXDOMAIN. We did not observe a missing
-				// record, so we do not assert one.
-				r.Status = results.StatusUnknown
-				r.Observed = results.Value{
-					Summary: fmt.Sprintf("%s did not answer for %s within the timeout", resolverLabel(server), t.Name),
-					Data:    map[string]any{"resolved": nil, "timeout": true},
-				}
-				r.Remediation = "The resolver did not answer at all. Confirm it is reachable on 53/udp " +
-					"from this vantage point before treating the record as missing."
-			case ans.Err != nil:
+			r.Remediation = "The resolver did not answer at all. Confirm it is reachable on 53/udp " +
+				"from this vantage point before treating the record as missing."
+		case ans.Err != nil:
+			r.Status = results.StatusFail
+			r.Observed = results.Value{
+				Summary: fmt.Sprintf("%s could not resolve %s: %v", resolverLabel(server), t.Name, ans.Err),
+				Data:    map[string]any{"resolved": nil, "error": ans.Err.Error()},
+			}
+		case len(ans.Addrs) == 0:
+			r.Status = results.StatusFail
+			r.Observed = results.Value{
+				Summary: fmt.Sprintf("%s returned no addresses for %s", resolverLabel(server), t.Name),
+				Data:    map[string]any{"resolved": []string{}},
+			}
+		default:
+			got := addrStrings(ans.Addrs)
+			r.Observed = results.Value{
+				Summary: fmt.Sprintf("%s resolved to %s", t.Name, strings.Join(got, ", ")),
+				Data:    map[string]any{"resolved": got},
+			}
+			if t.ExpectIP != "" && !contains(got, t.ExpectIP) {
+				// A name resolving to the wrong address is worse than one that
+				// does not resolve: the deployment proceeds and talks to
+				// something else.
 				r.Status = results.StatusFail
-				r.Observed = results.Value{
-					Summary: fmt.Sprintf("%s could not resolve %s: %v", resolverLabel(server), t.Name, ans.Err),
-					Data:    map[string]any{"resolved": nil, "error": ans.Err.Error()},
-				}
-			case len(ans.Addrs) == 0:
-				r.Status = results.StatusFail
-				r.Observed = results.Value{
-					Summary: fmt.Sprintf("%s returned no addresses for %s", resolverLabel(server), t.Name),
-					Data:    map[string]any{"resolved": []string{}},
-				}
-			default:
-				got := addrStrings(ans.Addrs)
-				r.Observed = results.Value{
-					Summary: fmt.Sprintf("%s resolved to %s", t.Name, strings.Join(got, ", ")),
-					Data:    map[string]any{"resolved": got},
-				}
-				if t.ExpectIP != "" && !contains(got, t.ExpectIP) {
-					// A name that resolves to the wrong address is worse than
-					// one that does not resolve: the deployment proceeds and
-					// talks to something else.
-					r.Status = results.StatusFail
-					r.Observed.Summary = fmt.Sprintf("%s resolved to %s, not the declared %s",
-						t.Name, strings.Join(got, ", "), t.ExpectIP)
-					r.Remediation = "The record exists but points elsewhere. Either the DNS record or " +
-						"the address declared in the config is wrong, and a deployment will silently " +
-						"talk to whatever the record points at."
-				} else {
-					r.Status = results.StatusPass
-				}
+				r.Observed.Summary = fmt.Sprintf("%s resolved to %s, not the declared %s",
+					t.Name, strings.Join(got, ", "), t.ExpectIP)
+				r.Remediation = "The record exists but points elsewhere. Either the DNS record or " +
+					"the address declared in the config is wrong, and a deployment will silently " +
+					"talk to whatever the record points at."
+			} else {
+				r.Status = results.StatusPass
 			}
+		}
+		checks.Finish(rc, &r)
+		return r
+	})
 
-			checks.Finish(rc, &r)
-			if r.Status != results.StatusPass {
-				failures = append(failures, r)
-			}
+	checked := len(jobs)
+	var failures []results.Result
+	for _, r := range all {
+		if r.Status != results.StatusPass {
+			failures = append(failures, r)
 		}
 	}
 
@@ -156,17 +170,7 @@ func (c Reverse) Run(ctx context.Context, rc *checks.RunContext) ([]results.Resu
 	required := rc.Config.Services.DNS.RequireReverse
 	servers := resolvers(rc.Config)
 
-	var failures []results.Result
-	for _, t := range targets {
-		addr, err := netip.ParseAddr(t.ExpectIP)
-		if err != nil {
-			continue
-		}
-		// One resolver is enough for PTR: unlike forward records, the reverse
-		// zone is rarely split, and querying every resolver multiplies noise
-		// without adding information.
-		ans := rc.Probes.LookupAddr(ctx, addr, servers[0])
-
+	all := mapConcurrent(ctx, targets, func(ctx context.Context, t namedTarget) results.Result {
 		r := checks.NewResult(c.Meta(), rc, t.ExpectIP)
 		if required {
 			// The config declared this a hard requirement. The check is not
@@ -178,6 +182,22 @@ func (c Reverse) Run(ctx context.Context, rc *checks.RunContext) ([]results.Resu
 			Summary: fmt.Sprintf("%s resolves back to %s", t.ExpectIP, t.Name),
 			Data:    map[string]any{"address": t.ExpectIP, "expected_name": t.Name},
 		}
+
+		addr, err := netip.ParseAddr(t.ExpectIP)
+		if err != nil {
+			r.Status = results.StatusSkip
+			r.Observed = results.Value{
+				Summary: t.ExpectIP + " is not a usable address",
+				Data:    map[string]any{"skip_reason": "unparseable address"},
+			}
+			checks.Finish(rc, &r)
+			return r
+		}
+
+		// One resolver is enough for PTR: unlike forward records the reverse
+		// zone is rarely split, and querying every resolver multiplies noise
+		// without adding information.
+		ans := rc.Probes.LookupAddr(ctx, addr, servers[0])
 
 		switch {
 		case ans.Timeout:
@@ -205,8 +225,12 @@ func (c Reverse) Run(ctx context.Context, rc *checks.RunContext) ([]results.Resu
 					t.ExpectIP, strings.Join(ans.Names, ", "), t.Name)
 			}
 		}
-
 		checks.Finish(rc, &r)
+		return r
+	})
+
+	var failures []results.Result
+	for _, r := range all {
 		if r.Status != results.StatusPass {
 			failures = append(failures, r)
 		}

@@ -43,8 +43,7 @@ func (c PortOpen) Run(ctx context.Context, rc *checks.RunContext) ([]results.Res
 		return []results.Result{skip(c.Meta(), rc, "no management endpoints declared")}, nil
 	}
 
-	var notable []results.Result
-	for _, ep := range eps {
+	all := mapConcurrent(ctx, eps, func(ctx context.Context, ep endpoint) results.Result {
 		ans := rc.Probes.DialTCP(ctx, ep.Address())
 
 		r := checks.NewResult(c.Meta(), rc, ep.Address())
@@ -58,7 +57,7 @@ func (c PortOpen) Run(ctx context.Context, rc *checks.RunContext) ([]results.Res
 			Data:    map[string]any{"address": ep.Address(), "source": ep.Source},
 		}
 		r.Observed = results.Value{
-			Data: map[string]any{"address": ep.Address(), "state": string(ans.State)},
+			Data: map[string]any{"address": ep.Address(), "state": string(ans.State), "vantage": rc.Vantage},
 		}
 
 		switch ans.State {
@@ -85,8 +84,12 @@ func (c PortOpen) Run(ctx context.Context, rc *checks.RunContext) ([]results.Res
 				r.Observed.Data["error"] = ans.Err.Error()
 			}
 		}
-
 		checks.Finish(rc, &r)
+		return r
+	})
+
+	var notable []results.Result
+	for _, r := range all {
 		if r.Status != results.StatusPass {
 			notable = append(notable, r)
 		}
@@ -131,8 +134,7 @@ func (c NTPReachable) Run(ctx context.Context, rc *checks.RunContext) ([]results
 		return []results.Result{skip(c.Meta(), rc, "no NTP servers declared")}, nil
 	}
 
-	var failures []results.Result
-	for _, s := range servers {
+	all := mapConcurrent(ctx, servers, func(ctx context.Context, s string) results.Result {
 		ans := rc.Probes.QueryNTP(ctx, s)
 
 		r := checks.NewResult(c.Meta(), rc, s)
@@ -153,8 +155,7 @@ func (c NTPReachable) Run(ctx context.Context, rc *checks.RunContext) ([]results
 				"a dead service. Confirm 123/udp is open from this vantage point."
 		case ans.Stratum == 0 || ans.Stratum >= 16:
 			// The server answered but is not itself synchronised, so its time
-			// is worthless. A check that only asked "did it answer" would pass
-			// this.
+			// is worthless. A check that only asked "did it answer" would pass.
 			r.Status = results.StatusFail
 			r.Observed.Summary = fmt.Sprintf("%s answered but is not synchronised (stratum %d)", s, ans.Stratum)
 			r.Observed.Data["stratum"] = int(ans.Stratum)
@@ -166,8 +167,12 @@ func (c NTPReachable) Run(ctx context.Context, rc *checks.RunContext) ([]results
 				s, ans.Stratum, ans.Offset.Round(time.Millisecond))
 			r.Observed.Data["stratum"] = int(ans.Stratum)
 		}
-
 		checks.Finish(rc, &r)
+		return r
+	})
+
+	var failures []results.Result
+	for _, r := range all {
 		if r.Status != results.StatusPass {
 			failures = append(failures, r)
 		}

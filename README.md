@@ -44,15 +44,50 @@ calls.
 ```bash
 make build
 
-# interactive: asks for what it cannot discover, saves the answers
+# First run: asks what it cannot discover, prompts for credentials, saves both
 ./vksinspect check --vcenter vcenter.corp.local --save-config lab01.yaml
 
-# non-interactive: same checks, no questions. This is the pipeline form.
+# Every run after that: no questions asked
 ./vksinspect check --config lab01.yaml
 ./vksinspect check --config lab01.yaml --format json
+./vksinspect check --config lab01.yaml --layer supervisor   # narrow the scope
 
-./vksinspect explain
+./vksinspect explain            # what this build checks
+./vksinspect explain dns.reverse
 ```
+
+**Running a config you already have** — just point `--config` at it. Nothing
+else is required; anything the file does not answer is prompted for, and a
+complete file asks nothing:
+
+```bash
+./vksinspect check --config /path/to/lab01.yaml
+```
+
+Add `--non-interactive` in CI so a missing value is an error naming the field
+rather than a prompt that hangs a pipeline.
+
+## Credentials
+
+Read-only accounts are enough — the tool performs no writes.
+
+Supply them however suits you; the tool asks only if it finds none:
+
+```bash
+# environment (takes precedence over everything)
+export VKSINSPECT_VCENTER_USERNAME='readonly@vsphere.local'
+export VKSINSPECT_VCENTER_PASSWORD='...'
+
+# or a file
+./vksinspect check --config lab01.yaml --credentials ~/.vksinspect/credentials.yaml
+
+# or just run it — it prompts, hides the password, and offers to save
+./vksinspect check --vcenter vcenter.corp.local
+```
+
+Saved credentials go to `~/.vksinspect/credentials.yaml` at mode `0600` (the
+tool refuses to read anything looser). They are **never** written to the
+environment config, a report, or a baseline. Saving is opt-in.
 
 The interactive flow and the config file are the same thing: prompting
 *produces* a config, it is not an alternative to one. That is what keeps
