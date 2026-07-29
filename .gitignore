@@ -20,9 +20,6 @@ credentials.yml
 /baselines/
 /reports/
 
-# Local agent/tooling state (not project content)
-.ijfw/
-
 # Editors / OS
 .DS_Store
 .idea/

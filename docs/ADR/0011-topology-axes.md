@@ -52,7 +52,8 @@ shown in the interactive prompt at the moment of choosing, and in the result.
 - **Cost:** two fields to set instead of one, and a validity table to maintain.
 - **Cost:** requirement rows in the matrix still say "Topologies: nsx, nsx-alb"
   in prose. The matrix has not been mechanically re-expressed in terms of axes.
-  That is a docs debt, not a code one, and it is listed in CLAUDE.md.
+  That is a docs debt, not a code one, and it is listed in
+  [CONTRIBUTING.md](../CONTRIBUTING.md).
 - **Open:** whether `nsx-vpc` + `haproxy` should exist. Currently absent, on the
   assumption that nobody is putting a legacy appliance in front of VCF 9 VPC
   networking. Unverified like everything else about VPC.

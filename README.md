@@ -137,8 +137,9 @@ serialise into any artifact. See
 | [REQUIREMENTS-MATRIX.md](docs/REQUIREMENTS-MATRIX.md) | The authoritative requirement list, with explicit confidence and flags. **Start here.** |
 | [CHECK-TAXONOMY.md](docs/CHECK-TAXONOMY.md) | The three check classes and what each may assume |
 | [test-coverage.md](docs/test-coverage.md) | Testing tiers; what needs a live lab |
+| [CONTRIBUTING.md](docs/CONTRIBUTING.md) | Conventions, known debt, open questions |
 | [ADR/](docs/ADR/) | One record per significant architectural decision |
-| [CLAUDE.md](CLAUDE.md) | Working agreement: scope, conventions, open questions |
+| [CHANGELOG.md](CHANGELOG.md) | What changed |
 
 ## Contributing
 
@@ -148,8 +149,9 @@ trace to, or describing the failure you hit so a requirement row can be written
 for it.
 
 Before adding a check, read the "Adding a check" section of
-[CLAUDE.md](CLAUDE.md). The short version: every check cites a requirement ID,
-runs in every mode it can, returns structured results, and never prints.
+[docs/CONTRIBUTING.md](docs/CONTRIBUTING.md). The short version: every check
+cites a requirement ID, runs in every mode it can, returns structured results,
+and never prints.
 
 ## Building
 

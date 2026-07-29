@@ -869,7 +869,7 @@ Adding these rows is outstanding work. Checks already carry a `Layer` field and
 waiting for content.
 
 Individual rows above have **not** been re-annotated with an explicit layer tag.
-That is docs debt tracked in CLAUDE.md.
+That is docs debt tracked in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 

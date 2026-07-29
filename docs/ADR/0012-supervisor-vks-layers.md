@@ -51,7 +51,8 @@ would otherwise exit 0 and read as a clean bill of health.
   name suggests, and saying so is better than letting the name mislead.
 - **Cost:** every matrix row needs a layer tag. The rows have not all been
   tagged yet — the field exists and the checks use it, but the markdown matrix
-  has not been re-annotated. Listed as debt in CLAUDE.md.
+  has not been re-annotated. Listed as debt in
+  [CONTRIBUTING.md](../CONTRIBUTING.md).
 - **Cost:** `both` is doing double duty as "applies at both layers" and as the
   filter value meaning "run everything". It reads naturally in both positions
   and a separate `all` value seemed like ceremony, but it is a slight conflation.
