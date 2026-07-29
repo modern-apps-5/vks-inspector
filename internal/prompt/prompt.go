@@ -94,7 +94,7 @@ func (p *Prompter) Select(question string, choices []Choice, def string) (string
 	}
 
 	for {
-		answer, err := p.readLine(promptLabel("select 1-"+itoa(len(choices)), def))
+		answer, err := p.readLine(promptLabel("select 1-"+itoa(len(choices)), "", def))
 		if err != nil {
 			return "", err
 		}
@@ -112,8 +112,20 @@ func (p *Prompter) Select(question string, choices []Choice, def string) (string
 	}
 }
 
+// Validator checks an answer and returns it in canonical form.
+//
+// It returns the normalised value rather than just an error so a prompt can
+// accept what an operator naturally types and store what the config schema
+// needs — "192.168.200.5" becoming "192.168.200.5/32", for instance. Rejecting
+// input the tool could have understood is friction with nothing to show for it.
+type Validator func(string) (string, error)
+
 // Ask asks a free-text question. validate may be nil.
-func (p *Prompter) Ask(question, def string, validate func(string) error) (string, error) {
+//
+// example is shown as "e.g. …" and is not optional in spirit: a free-text
+// prompt with no example makes the operator guess at the format, and they will
+// guess wrong. Pass "" only when the shape is genuinely self-evident.
+func (p *Prompter) Ask(question, example, def string, validate Validator) (string, error) {
 	if !p.Interactive {
 		if def != "" {
 			return def, nil
@@ -122,34 +134,36 @@ func (p *Prompter) Ask(question, def string, validate func(string) error) (strin
 	}
 
 	for {
-		answer, err := p.readLine(promptLabel(question, def))
+		answer, err := p.readLine(promptLabel(question, example, def))
 		if err != nil {
 			return "", err
 		}
 		if answer == "" {
 			if def == "" {
-				fmt.Fprintf(p.out, "     required\n")
+				fmt.Fprintf(p.out, "     required — %s\n", requiredHint(example))
 				continue
 			}
 			answer = def
 		}
 		if validate != nil {
-			if err := validate(answer); err != nil {
+			normalised, err := validate(answer)
+			if err != nil {
 				fmt.Fprintf(p.out, "     %v\n", err)
 				continue
 			}
+			answer = normalised
 		}
 		return answer, nil
 	}
 }
 
 // AskOptional is Ask that accepts an empty answer.
-func (p *Prompter) AskOptional(question string, validate func(string) error) (string, error) {
+func (p *Prompter) AskOptional(question, example string, validate Validator) (string, error) {
 	if !p.Interactive {
 		return "", nil
 	}
 	for {
-		answer, err := p.readLine(promptLabel(question+" (optional)", ""))
+		answer, err := p.readLine(promptLabel(question+" (optional)", example, ""))
 		if err != nil {
 			return "", err
 		}
@@ -157,33 +171,82 @@ func (p *Prompter) AskOptional(question string, validate func(string) error) (st
 			return "", nil
 		}
 		if validate != nil {
-			if err := validate(answer); err != nil {
+			normalised, err := validate(answer)
+			if err != nil {
 				fmt.Fprintf(p.out, "     %v\n", err)
 				continue
 			}
+			answer = normalised
 		}
 		return answer, nil
 	}
 }
 
-// AskList asks for a comma-separated list.
-func (p *Prompter) AskList(question string, def []string, validate func(string) error) ([]string, error) {
+// AskList asks for a comma-separated list. At least one entry is required.
+func (p *Prompter) AskList(question, example string, def []string, validate Validator) ([]string, error) {
+	return p.askList(question, example, def, validate, false)
+}
+
+// AskListOptional asks for a comma-separated list and accepts an empty answer.
+//
+// Separate from AskList rather than a bool argument because the distinction is
+// load-bearing: a prompt whose text says "leave empty to skip" and then rejects
+// an empty answer is the tool lying about its own behaviour, and that is worse
+// than an awkward API.
+func (p *Prompter) AskListOptional(question, example string, validate Validator) ([]string, error) {
+	return p.askList(question, example, nil, validate, true)
+}
+
+func (p *Prompter) askList(question, example string, def []string, validate Validator, allowEmpty bool) ([]string, error) {
 	defStr := strings.Join(def, ", ")
-	answer, err := p.Ask(question, defStr, func(s string) error {
-		if validate == nil {
-			return nil
+
+	if !p.Interactive {
+		if defStr != "" {
+			return splitList(defStr), nil
 		}
-		for _, item := range splitList(s) {
-			if err := validate(item); err != nil {
-				return err
+		if allowEmpty {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("%w: %s", ErrNonInteractive, question)
+	}
+
+	for {
+		answer, err := p.readLine(promptLabel(question, example, defStr))
+		if err != nil {
+			return nil, err
+		}
+		if answer == "" {
+			if defStr != "" {
+				answer = defStr
+			} else if allowEmpty {
+				return nil, nil
+			} else {
+				fmt.Fprintf(p.out, "     required — %s\n", requiredHint(example))
+				continue
 			}
 		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
+
+		items := splitList(answer)
+		out := make([]string, 0, len(items))
+		bad := false
+		for _, item := range items {
+			if validate == nil {
+				out = append(out, item)
+				continue
+			}
+			normalised, err := validate(item)
+			if err != nil {
+				fmt.Fprintf(p.out, "     %v\n", err)
+				bad = true
+				break
+			}
+			out = append(out, normalised)
+		}
+		if bad {
+			continue
+		}
+		return out, nil
 	}
-	return splitList(answer), nil
 }
 
 // Confirm asks a yes/no question.
@@ -259,11 +322,24 @@ func (p *Prompter) readLine(label string) (string, error) {
 
 const flagMark = "⚑"
 
-func promptLabel(question, def string) string {
+func promptLabel(question, example, def string) string {
+	if example != "" {
+		question += "  (e.g. " + example + ")"
+	}
 	if def != "" {
 		return fmt.Sprintf("  %s [%s]: ", question, def)
 	}
 	return fmt.Sprintf("  %s: ", question)
+}
+
+// requiredHint turns a bare "required" into something actionable. Being told
+// "required" three times in a row without being told what shape the answer
+// takes is how an operator ends up guessing.
+func requiredHint(example string) string {
+	if example == "" {
+		return "this question has no default"
+	}
+	return "expected something like " + example
 }
 
 func splitList(s string) []string {

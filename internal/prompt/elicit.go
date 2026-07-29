@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/netip"
 	"strconv"
+	"strings"
 
 	"github.com/modern-apps-5/vks-inspector/internal/config"
 	"github.com/modern-apps-5/vks-inspector/internal/netx"
@@ -59,7 +60,7 @@ func elicitIdentity(p *Prompter, cfg *config.Config) error {
 		return nil
 	}
 	p.Section("Environment")
-	name, err := p.Ask("Name for this environment (used in reports and baselines)", "", nil)
+	name, err := p.Ask("Name for this environment (used in reports and baselines)", "lab-nsx-01", "", nil)
 	if err != nil {
 		return err
 	}
@@ -126,14 +127,14 @@ func elicitServices(p *Prompter, cfg *config.Config) error {
 	p.Section("Infrastructure services")
 
 	if needDNS {
-		servers, err := p.AskList("DNS servers (comma separated)", nil, validAddr)
+		servers, err := p.AskList("DNS servers", "10.10.0.53, 10.10.0.54", nil, normAddr)
 		if err != nil {
 			return err
 		}
 		cfg.Services.DNS.Servers = servers
 	}
 	if needNTP {
-		servers, err := p.AskList("NTP servers (comma separated)", nil, nil)
+		servers, err := p.AskList("NTP servers", "ntp.corp.local, 10.10.0.123", nil, normHost)
 		if err != nil {
 			return err
 		}
@@ -144,7 +145,7 @@ func elicitServices(p *Prompter, cfg *config.Config) error {
 		// requirement (matrix row COM-NTP-002). It is prompted rather than
 		// silently applied so the operator knows a judgement call was made.
 		v, err := p.Ask("Maximum tolerated clock skew, seconds (field heuristic, not a documented product limit)",
-			"30", validPositiveInt)
+			"", "30", normPositiveInt)
 		if err != nil {
 			return err
 		}
@@ -157,7 +158,7 @@ func elicitNetworks(p *Prompter, cfg *config.Config) error {
 	p.Section("Addressing")
 
 	if cfg.Networks.Management.CIDR == "" {
-		cidr, err := p.Ask("Management network CIDR (Supervisor control plane VMs)", "", validCIDR)
+		cidr, err := p.Ask("Management network CIDR (Supervisor control plane VMs)", "10.10.0.0/24", "", normStrictCIDR)
 		if err != nil {
 			return err
 		}
@@ -165,7 +166,7 @@ func elicitNetworks(p *Prompter, cfg *config.Config) error {
 		cfg.Networks.Management.CIDR = cidr
 		cfg.Networks.Management.Routable = true
 
-		gw, err := p.Ask("Management network gateway", "", validAddr)
+		gw, err := p.Ask("Management network gateway", "10.10.0.1", "", normAddr)
 		if err != nil {
 			return err
 		}
@@ -177,11 +178,12 @@ func elicitNetworks(p *Prompter, cfg *config.Config) error {
 		// rule is carried forward from the vSphere-with-Tanzu era and is not
 		// confirmed for VCF 9, so the prompt states it as an unconfirmed
 		// convention rather than presenting it as a requirement.
-		start, err := p.Ask("Start of the Supervisor control plane address range", "", validAddr)
+		start, err := p.Ask("Start of the Supervisor control plane address range", "10.10.0.30", "", normAddr)
 		if err != nil {
 			return err
 		}
-		end, err := p.Ask("End of that range (conventionally 5 consecutive addresses — unconfirmed for VCF 9)", "", validAddr)
+		end, err := p.Ask("End of that range (conventionally 5 consecutive addresses — unconfirmed for VCF 9)",
+			"10.10.0.34", "", normAddr)
 		if err != nil {
 			return err
 		}
@@ -191,26 +193,26 @@ func elicitNetworks(p *Prompter, cfg *config.Config) error {
 	}
 
 	if len(cfg.Networks.Workload) == 0 {
-		cidr, err := p.Ask("Workload network CIDR (Supervisor and VKS cluster nodes)", "", validCIDR)
+		cidr, err := p.Ask("Workload network CIDR (Supervisor and VKS cluster nodes)", "10.20.0.0/16", "", normStrictCIDR)
 		if err != nil {
 			return err
 		}
 		w := config.NetworkSpec{Name: "workload-primary", CIDR: cidr, Routable: true}
-		if gw, err := p.AskOptional("Workload network gateway", validAddr); err == nil && gw != "" {
+		if gw, err := p.AskOptional("Workload network gateway", "10.20.0.1", normAddr); err == nil && gw != "" {
 			w.Gateway = gw
 		}
 		cfg.Networks.Workload = append(cfg.Networks.Workload, w)
 	}
 
 	if len(cfg.Kubernetes.PodCIDRs) == 0 {
-		v, err := p.Ask("Pod CIDR (cluster-internal)", "10.244.0.0/20", validCIDR)
+		v, err := p.Ask("Pod CIDR (cluster-internal)", "", "10.244.0.0/20", normStrictCIDR)
 		if err != nil {
 			return err
 		}
 		cfg.Kubernetes.PodCIDRs = []string{v}
 	}
 	if cfg.Kubernetes.ServiceCIDR == "" {
-		v, err := p.Ask("Service CIDR (cluster-internal)", "10.96.0.0/22", validCIDR)
+		v, err := p.Ask("Service CIDR (cluster-internal)", "", "10.96.0.0/22", normStrictCIDR)
 		if err != nil {
 			return err
 		}
@@ -221,9 +223,11 @@ func elicitNetworks(p *Prompter, cfg *config.Config) error {
 		// Asked explicitly, with the consequence stated, because an empty list
 		// silently reduces cidr.external-collision to a no-op and the operator
 		// deserves to know that before the report says "no collisions".
-		v, err := p.AskList(
-			"Existing networks this deployment must not collide with, comma separated\n"+
-				"    (leave empty to skip collision detection entirely)", nil, validCIDRList)
+		v, err := p.AskListOptional(
+			"Existing networks this deployment must not collide with\n"+
+				"    Corporate subnets, VPN pools, neighbouring clusters. Comma separated.\n"+
+				"    Press Enter to skip — collision detection is then reported as skipped, not passed",
+			"10.0.0.0/8, 172.16.0.0/12, 192.168.50.10", normCIDR)
 		if err != nil {
 			return err
 		}
@@ -241,7 +245,7 @@ func elicitTopologySpecific(p *Prompter, cfg *config.Config) error {
 		}
 		p.Section("NSX")
 		if cfg.NSX.Tier0Gateway == "" && t.Networking == config.NetNSX {
-			v, err := p.Ask("Tier-0 gateway name", "", nil)
+			v, err := p.Ask("Tier-0 gateway name", "T0-Edge-01", "", nil)
 			if err != nil {
 				return err
 			}
@@ -251,7 +255,7 @@ func elicitTopologySpecific(p *Prompter, cfg *config.Config) error {
 			// FLAGGED: matrix row COM-MTU-001. 1600 is the long-standing Geneve
 			// minimum; the VCF 9 requirement is unconfirmed and 9000 is common
 			// in practice. Prompted rather than hardcoded.
-			v, err := p.Ask("Required overlay (Geneve) MTU on the underlay", "1700", validPositiveInt)
+			v, err := p.Ask("Required overlay (Geneve) MTU on the underlay", "", "1700", normPositiveInt)
 			if err != nil {
 				return err
 			}
@@ -259,14 +263,14 @@ func elicitTopologySpecific(p *Prompter, cfg *config.Config) error {
 		}
 		if t.Networking == config.NetNSX {
 			if cfg.Kubernetes.IngressCIDR == "" {
-				v, err := p.Ask("Ingress CIDR (load balancer VIPs)", "", validCIDR)
+				v, err := p.Ask("Ingress CIDR (load balancer VIPs)", "192.168.100.0/24", "", normStrictCIDR)
 				if err != nil {
 					return err
 				}
 				cfg.Kubernetes.IngressCIDR = v
 			}
 			if cfg.Kubernetes.EgressCIDR == "" {
-				v, err := p.Ask("Egress CIDR (SNAT addresses)", "", validCIDR)
+				v, err := p.Ask("Egress CIDR (SNAT addresses)", "192.168.101.0/24", "", normStrictCIDR)
 				if err != nil {
 					return err
 				}
@@ -286,7 +290,7 @@ func elicitTopologySpecific(p *Prompter, cfg *config.Config) error {
 		}
 		p.Section("NSX Advanced Load Balancer")
 		if cfg.ALB.Controller.FQDN == "" {
-			v, err := p.Ask("ALB controller FQDN or address", "", nil)
+			v, err := p.Ask("ALB controller FQDN or address", "avi.corp.local", "", normHost)
 			if err != nil {
 				return err
 			}
@@ -294,17 +298,17 @@ func elicitTopologySpecific(p *Prompter, cfg *config.Config) error {
 			cfg.ALB.Controller.CredentialRef = "alb"
 		}
 		if cfg.ALB.VIPNetwork == nil {
-			cidr, err := p.Ask("VIP network CIDR", "", validCIDR)
+			cidr, err := p.Ask("VIP network CIDR", "192.168.100.0/24", "", normStrictCIDR)
 			if err != nil {
 				return err
 			}
 			vip := &config.NetworkSpec{Name: "alb-vip", CIDR: cidr, Routable: true}
-			start, err := p.AskOptional("VIP pool start address", validAddr)
+			start, err := p.AskOptional("VIP pool start address", "192.168.100.100", normAddr)
 			if err != nil {
 				return err
 			}
 			if start != "" {
-				end, err := p.Ask("VIP pool end address", "", validAddr)
+				end, err := p.Ask("VIP pool end address", "192.168.100.200", "", normAddr)
 				if err != nil {
 					return err
 				}
@@ -321,7 +325,7 @@ func elicitTopologySpecific(p *Prompter, cfg *config.Config) error {
 		p.Section("HAProxy")
 		p.Info("%s HAProxy is believed deprecated in the VCF 9 generation (matrix row LB-HAP-000).", flagMark)
 		if cfg.HAProxy.Appliance.FQDN == "" {
-			v, err := p.Ask("HAProxy appliance FQDN or address", "", nil)
+			v, err := p.Ask("HAProxy appliance FQDN or address", "haproxy.corp.local", "", normHost)
 			if err != nil {
 				return err
 			}
@@ -329,7 +333,7 @@ func elicitTopologySpecific(p *Prompter, cfg *config.Config) error {
 			cfg.HAProxy.Appliance.CredentialRef = "haproxy"
 		}
 		if cfg.HAProxy.LoadBalancerCIDR == "" {
-			v, err := p.Ask("Load balancer VIP CIDR", "", validCIDR)
+			v, err := p.Ask("Load balancer VIP CIDR", "192.168.100.0/24", "", normStrictCIDR)
 			if err != nil {
 				return err
 			}
@@ -359,7 +363,7 @@ func elicitScale(p *Prompter, cfg *config.Config) error {
 		{"Expected LoadBalancer-type Services", "30", func(v int) { cfg.Scale.ExpectedLoadBalancerServices = v }},
 		{"Growth headroom percent", "30", func(v int) { cfg.Scale.GrowthHeadroomPercent = v }},
 	} {
-		v, err := p.Ask(q.question, q.def, validPositiveInt)
+		v, err := p.Ask(q.question, "", q.def, normPositiveInt)
 		if err != nil {
 			return err
 		}
@@ -411,24 +415,65 @@ func (d *Discovered) Lines() []string {
 	return out
 }
 
-func validCIDR(s string) error {
-	_, err := netx.ParsePrefix(s)
-	return err
-}
-
-func validCIDRList(s string) error { return validCIDR(s) }
-
-func validAddr(s string) error {
-	if _, err := netip.ParseAddr(s); err != nil {
-		return fmt.Errorf("%q is not a valid IP address", s)
+// normCIDR accepts a CIDR, or a bare address meaning a single host.
+//
+// "192.168.200.5" becoming "192.168.200.5/32" is not laxness: for a field like
+// "networks this must not collide with", protecting one address is a perfectly
+// ordinary intent, and making the operator type "/32" to express it is friction
+// with nothing to show for it.
+//
+// A prefix with host bits set is still rejected. "192.168.200.5/24" is
+// genuinely ambiguous — the whole /24, or that one host? — and guessing at an
+// address plan is exactly what this tool exists not to do. The error names the
+// masked form so the correction is one edit away.
+func normCIDR(v string) (string, error) {
+	v = strings.TrimSpace(v)
+	if addr, err := netip.ParseAddr(v); err == nil {
+		return netip.PrefixFrom(addr, addr.BitLen()).String(), nil
 	}
-	return nil
+	p, err := netx.ParsePrefix(v)
+	if err != nil {
+		return "", err
+	}
+	return p.String(), nil
 }
 
-func validPositiveInt(s string) error {
-	n, err := strconv.Atoi(s)
+// normStrictCIDR requires a real prefix. Used where a bare host address could
+// not possibly be meant — a network the deployment will sit on.
+func normStrictCIDR(v string) (string, error) {
+	p, err := netx.ParsePrefix(strings.TrimSpace(v))
+	if err != nil {
+		return "", err
+	}
+	return p.String(), nil
+}
+
+func normAddr(v string) (string, error) {
+	v = strings.TrimSpace(v)
+	a, err := netip.ParseAddr(v)
+	if err != nil {
+		return "", fmt.Errorf("%q is not a valid IP address", v)
+	}
+	return a.String(), nil
+}
+
+// normHost accepts an IP address or a hostname/FQDN.
+func normHost(v string) (string, error) {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return "", fmt.Errorf("a hostname or IP address is required")
+	}
+	if strings.ContainsAny(v, " \t/\\") {
+		return "", fmt.Errorf("%q is not a valid hostname or IP address", v)
+	}
+	return v, nil
+}
+
+func normPositiveInt(v string) (string, error) {
+	v = strings.TrimSpace(v)
+	n, err := strconv.Atoi(v)
 	if err != nil || n <= 0 {
-		return fmt.Errorf("%q is not a positive number", s)
+		return "", fmt.Errorf("%q is not a positive whole number", v)
 	}
-	return nil
+	return v, nil
 }

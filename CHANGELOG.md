@@ -86,6 +86,18 @@ unverified), `docs/CHECK-TAXONOMY.md`, `docs/test-coverage.md`, and 14 ADRs.
 
 ### Fixed
 
+- **An "optional" prompt refused an empty answer.** The external-networks
+  question said "leave empty to skip" and then rejected empty as `required`,
+  stranding the operator with no way past it. `AskListOptional` is now a
+  distinct call from `AskList` so the promise and the behaviour cannot drift
+  apart again.
+- **Prompts showed no expected format.** Every free-text question now carries an
+  `(e.g. …)` example, and a `required` message names the shape it wants instead
+  of only saying "required".
+- Prompt answers are now normalised as well as validated: a bare address is
+  accepted where a single host is a legitimate answer and stored as `/32`. A
+  prefix with host bits set is still refused — `192.168.200.5/24` is genuinely
+  ambiguous — but the error names the masked form so the fix is one edit away.
 - A network's own static range was reported as colliding with its own subnet.
   Containment there is required, not a conflict; the check now excludes
   parent/child pairs and `range.containment` asserts the containment separately.
@@ -102,7 +114,8 @@ unverified), `docs/CHECK-TAXONOMY.md`, `docs/test-coverage.md`, and 14 ADRs.
 - 46 of 89 requirement rows are flagged as unconfirmed against current VCF 9 /
   VKS documentation. Checks are not built on flagged rows.
 - VKS-layer requirement rows are not yet written; the matrix says so explicitly.
-- The interactive prompt flow has no automated test.
+- The interactive prompt flow is now covered (`internal/prompt`), but the
+  end-to-end `--save-config` round trip is not.
 - **A passing run is not a validated environment.**
 
 ### Security
