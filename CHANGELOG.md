@@ -51,6 +51,17 @@ version, datacenters, clusters, hosts, distributed switches, portgroups, and any
 registered NSX Manager. Discovered values pre-fill the question flow and are
 reported rather than asked; a discovered value never overwrites a declared one.
 
+**`--insecure-skip-tls-verify`**, and a prompt for it during credential entry.
+Self-signed management-plane certificates are the norm in labs, and refusing to
+connect to them made every credentialed check unreachable there. When
+verification is off, `tls.chain` reports **`SKIP` with a reason** for that
+endpoint rather than a pass — honouring what ADR-0005 promised: an unverified
+connection cannot evidence a valid chain. `tls.expiry` still reports and states
+that it covers expiry only.
+
+**`--force`** lets `--save-config` overwrite. An interactive run asks;
+a non-interactive one without `--force` still refuses.
+
 **Credential prompting.** If no credentials are found, the tool asks — username
 plainly, password with terminal echo disabled — and offers to save them to
 `~/.vksinspect/credentials.yaml` at mode 0600. Saving is opt-in; writing
@@ -134,6 +145,19 @@ unverified), `docs/CHECK-TAXONOMY.md`, `docs/test-coverage.md`, and 14 ADRs.
   example failed its own checks.
 
 ### Fixed
+
+- **Thin passes read as broad ones.** `dns.forward` reported "1 name resolved
+  correctly" without mentioning that the vCenter had been declared by IP and so
+  was never name-checked. It now names every endpoint it could not cover. Same
+  for `tls.expiry`, which now says when a chain was unverified rather than
+  sitting next to a `tls.chain` failure looking like a clean bill of health.
+- **A chain failure caused by connecting via IP is now diagnosed precisely.**
+  A certificate is validated against the address connected to, so reaching
+  `10.47.0.200` when the certificate is issued for `vc01.gpu.set.lab` fails SAN
+  matching even when the certificate is fine. The finding now names both the
+  mismatch and the hostname to use instead of offering generic advice.
+- **`--save-config` could not overwrite**, making a re-run of the wizard
+  needlessly painful. It now asks interactively, and `--force` skips the question.
 
 - **The report read as a readiness verdict for work it had not done.** A run of
   pure config arithmetic printed "4 passed, 0 failed / all checks passed" with

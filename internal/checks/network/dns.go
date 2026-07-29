@@ -127,10 +127,18 @@ func (c Forward) Run(ctx context.Context, rc *checks.RunContext) ([]results.Resu
 	if len(failures) > 0 {
 		return failures, nil
 	}
-	return []results.Result{summaryPass(c.Meta(), rc,
-		fmt.Sprintf("%d name(s) resolved correctly from %d resolver(s)", len(targets), len(servers)),
-		map[string]any{"names_checked": len(targets), "resolvers": len(servers), "lookups": checked},
-	)}, nil
+
+	// Say what was NOT covered. An endpoint declared by IP has no name to
+	// resolve, so a bare "names resolved correctly" overstates the result —
+	// which is exactly how a thin pass gets read as a broad one.
+	summary := fmt.Sprintf("%d name(s) resolved correctly from %d resolver(s)", len(targets), len(servers))
+	data := map[string]any{"names_checked": len(targets), "resolvers": len(servers), "lookups": checked}
+	if ipOnly := ipOnlyEndpoints(rc.Config); len(ipOnly) > 0 {
+		summary += fmt.Sprintf("; %d endpoint(s) declared by IP only and therefore NOT name-checked: %s",
+			len(ipOnly), strings.Join(ipOnly, ", "))
+		data["ip_only_endpoints"] = ipOnly
+	}
+	return []results.Result{summaryPass(c.Meta(), rc, summary, data)}, nil
 }
 
 // ---------------------------------------------------------------------------

@@ -2,15 +2,22 @@ package network_test
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"errors"
+	"math/big"
 	"net"
 	"net/netip"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/modern-apps-5/vks-inspector/internal/checks"
 	"github.com/modern-apps-5/vks-inspector/internal/checks/network"
 	"github.com/modern-apps-5/vks-inspector/internal/config"
+	"github.com/modern-apps-5/vks-inspector/internal/creds"
 	"github.com/modern-apps-5/vks-inspector/internal/probes"
 	"github.com/modern-apps-5/vks-inspector/internal/results"
 )
@@ -488,4 +495,121 @@ func TestResultsAreDiffable(t *testing.T) {
 			}
 		}
 	}
+}
+
+// Disabling TLS verification makes any assertion about the chain meaningless.
+// ADR-0005 promised the tool would say so rather than report a pass it did not
+// earn or a failure it chose not to look for.
+func TestUnverifiedTLSIsReportedAsSuchNotAsAPass(t *testing.T) {
+	t.Parallel()
+
+	leaf := selfSigned(t, "vc01.gpu.set.lab", now.Add(365*24*time.Hour))
+	f := &probes.Fake{TLS: map[string]probes.TLSAnswer{
+		"vc.example.com:443": {Chain: []*x509.Certificate{leaf}, Verified: false,
+			VerifyErr: errors.New("certificate is not trusted")},
+	}}
+
+	credSet, err := creds.Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	credSet.Put("vcenter", creds.Credential{Username: "u", Password: "p", InsecureSkipVerify: true})
+
+	ctx := rc(f, func(cfg *config.Config) {
+		cfg.Infrastructure.VCenter.CredentialRef = "vcenter"
+	})
+	ctx.Creds = credSet
+
+	res, err := network.TLSChain{}.Run(context.Background(), ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := res[0]
+	if r.Status != results.StatusSkip {
+		t.Errorf("status = %s, want skip — an unverified chain is neither a pass nor a failure", r.Status)
+	}
+	if !strings.Contains(r.Observed.Summary, "NOT verified") {
+		t.Errorf("the result does not say verification was disabled: %s", r.Observed.Summary)
+	}
+}
+
+// The commonest real-world cause of a chain failure, and one the tool can name
+// precisely: connecting by IP to a certificate issued for a hostname.
+func TestIPOnlyEndpointGetsASpecificDiagnosis(t *testing.T) {
+	t.Parallel()
+
+	leaf := selfSigned(t, "vc01.gpu.set.lab", now.Add(365*24*time.Hour))
+	f := &probes.Fake{TLS: map[string]probes.TLSAnswer{
+		"10.47.0.200:443": {Chain: []*x509.Certificate{leaf}, Verified: false,
+			VerifyErr: errors.New("certificate is not trusted")},
+	}}
+	ctx := rc(f, func(cfg *config.Config) {
+		cfg.Infrastructure.VCenter = config.Endpoint{IP: "10.47.0.200", Port: 443}
+	})
+
+	res, err := network.TLSChain{}.Run(context.Background(), ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := res[0]
+	if !strings.Contains(r.Observed.Summary, "by IP") {
+		t.Errorf("failure does not identify the IP-vs-name mismatch: %s", r.Observed.Summary)
+	}
+	if !strings.Contains(r.Remediation, "vc01.gpu.set.lab") {
+		t.Errorf("remediation does not name the certificate's actual hostname: %s", r.Remediation)
+	}
+}
+
+// An endpoint declared by IP has no name to resolve, so a passing DNS result
+// must disclose it. Otherwise a thin pass reads as a broad one.
+func TestForwardDNSDisclosesIPOnlyEndpoints(t *testing.T) {
+	t.Parallel()
+
+	f := &probes.Fake{Hosts: map[string]probes.DNSAnswer{
+		"harbor.example.com": {Addrs: addrs("192.0.2.20")},
+	}}
+	ctx := rc(f, func(cfg *config.Config) {
+		cfg.Infrastructure.VCenter = config.Endpoint{IP: "10.47.0.200", Port: 443}
+		cfg.Infrastructure.Registry = &config.Endpoint{FQDN: "harbor.example.com", IP: "192.0.2.20"}
+	})
+
+	res, err := network.Forward{}.Run(context.Background(), ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := res[0]
+	if r.Status != results.StatusPass {
+		t.Fatalf("status = %s: %s", r.Status, r.Observed.Summary)
+	}
+	if !strings.Contains(r.Observed.Summary, "NOT name-checked") {
+		t.Errorf("pass does not disclose the IP-only endpoint: %s", r.Observed.Summary)
+	}
+	if r.Observed.Data["ip_only_endpoints"] == nil {
+		t.Error("ip_only_endpoints not recorded in the observation")
+	}
+}
+
+// selfSigned builds a certificate for testing chain diagnostics.
+func selfSigned(t *testing.T, dnsName string, notAfter time.Time) *x509.Certificate {
+	t.Helper()
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{CommonName: dnsName},
+		DNSNames:     []string{dnsName},
+		NotBefore:    now.Add(-time.Hour),
+		NotAfter:     notAfter,
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cert, err := x509.ParseCertificate(der)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cert
 }

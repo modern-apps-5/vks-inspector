@@ -131,6 +131,10 @@ func (g *globalOpts) buildClients(ctx context.Context, cfg *config.Config, credS
 		cred = asked
 	}
 
+	if g.insecureTLS {
+		cred.InsecureSkipVerify = true
+	}
+
 	opts := clients.DefaultOptions()
 	opts.Timeout = g.timeout
 	c := vcenterclient.New(endpoint, cred, opts)
@@ -162,6 +166,9 @@ func (g *globalOpts) askForCredentials(endpoint, ref string, set *creds.Set) (cr
 	}
 
 	p := prompt.New(os.Stdin, os.Stderr, true)
+	// --defaults applies here too, so Enter accepts the suggested username. The
+	// password can never have a default and is always typed.
+	p.UseExamples = g.useDefaults
 	p.Section("Credentials for " + endpoint)
 	p.Info("Not found in the environment or a credentials file.")
 	p.Info("A read-only account is enough — this tool performs no writes.")
@@ -176,6 +183,21 @@ func (g *globalOpts) askForCredentials(endpoint, ref string, set *creds.Set) (cr
 	}
 
 	cred := creds.Credential{Username: user, Password: pass}
+
+	// Self-signed management-plane certificates are the norm in labs, and a
+	// tool that simply refuses to connect to them is useless there. Ask, rather
+	// than making the operator discover a flag.
+	if g.insecureTLS {
+		cred.InsecureSkipVerify = true
+	} else {
+		skip, err := p.Confirm(
+			"Skip TLS certificate verification for this endpoint? (needed for self-signed certs)", false)
+		if err == nil && skip {
+			cred.InsecureSkipVerify = true
+			p.Info("Certificate checks for %s will be reported as informational —", endpoint)
+			p.Info("an unverified connection cannot evidence a valid chain.")
+		}
+	}
 	set.Put(ref, cred)
 
 	save, err := p.Confirm("Save these credentials for next time?", true)
@@ -271,7 +293,7 @@ func (g *globalOpts) resolveConfig(cmd *cobra.Command) (*config.Config, error) {
 	}
 
 	if g.saveConfig != "" {
-		if err := saveConfig(cfg, g.saveConfig); err != nil {
+		if err := g.writeConfig(cfg, p); err != nil {
 			return nil, err
 		}
 		fmt.Fprintf(os.Stderr, "\n  saved answers to %s\n  re-run non-interactively:  vksinspect %s --config %s\n\n",
@@ -299,6 +321,9 @@ func (g *globalOpts) discover(ctx context.Context, cfg *config.Config) *prompt.D
 	cred, ok := credSet.Get(ref)
 	if !ok {
 		return nil
+	}
+	if g.insecureTLS {
+		cred.InsecureSkipVerify = true
 	}
 
 	opts := clients.DefaultOptions()
@@ -340,14 +365,25 @@ func (g *globalOpts) discover(ctx context.Context, cfg *config.Config) *prompt.D
 	return d
 }
 
-// saveConfig writes the assembled config.
+// writeConfig writes the assembled config, asking before it overwrites.
 //
-// It refuses to overwrite. An operator who has just answered twenty questions
-// should not be able to destroy a colleague's config with a mistyped filename.
-func saveConfig(cfg *config.Config, path string) error {
-	if _, err := os.Stat(path); err == nil {
-		return fmt.Errorf("%s already exists; choose another path or remove it", path)
+// Overwriting silently would let someone destroy a colleague's config with a
+// mistyped filename; refusing outright made re-running the wizard needlessly
+// painful. So: --force overwrites, an interactive run asks, and a
+// non-interactive run without --force still refuses.
+func (g *globalOpts) writeConfig(cfg *config.Config, p *prompt.Prompter) error {
+	path := g.saveConfig
+	if _, err := os.Stat(path); err == nil && !g.forceOverwrite {
+		ok, perr := p.Confirm(fmt.Sprintf("%s already exists. Overwrite it?", path), false)
+		if perr != nil || !ok {
+			return fmt.Errorf("%s already exists; re-run with --force, or choose another path", path)
+		}
 	}
+	return saveConfig(cfg, path)
+}
+
+// saveConfig writes the assembled config.
+func saveConfig(cfg *config.Config, path string) error {
 	blob, err := yaml.Marshal(cfg)
 	if err != nil {
 		return fmt.Errorf("serialise config: %w", err)

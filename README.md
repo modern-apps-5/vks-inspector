@@ -51,6 +51,7 @@ make build
 ./vksinspect check --config lab01.yaml
 ./vksinspect check --config lab01.yaml --format json
 ./vksinspect check --config lab01.yaml --layer supervisor   # narrow the scope
+./vksinspect check --vcenter vc.corp.local --defaults        # accept every suggested answer on Enter
 
 ./vksinspect explain            # what this build checks
 ./vksinspect explain dns.reverse
@@ -63,6 +64,9 @@ complete file asks nothing:
 ```bash
 ./vksinspect check --config /path/to/lab01.yaml
 ```
+
+`--save-config` asks before overwriting an existing file; `--force` overwrites
+without asking, and is required in a non-interactive run.
 
 Add `--non-interactive` in CI so a missing value is an error naming the field
 rather than a prompt that hangs a pipeline.
@@ -88,6 +92,25 @@ export VKSINSPECT_VCENTER_PASSWORD='...'
 Saved credentials go to `~/.vksinspect/credentials.yaml` at mode `0600` (the
 tool refuses to read anything looser). They are **never** written to the
 environment config, a report, or a baseline. Saving is opt-in.
+
+**Self-signed certificates.** Lab vCenters usually have them, and verification
+failure otherwise blocks every credentialed check. The tool asks, or use the flag:
+
+```bash
+./vksinspect check --config lab01.yaml --insecure-skip-tls-verify
+```
+
+When verification is off, `tls.chain` reports **`SKIP` with a reason** for that
+endpoint rather than a pass — an unverified connection cannot evidence a valid
+chain, so claiming otherwise would be a lie. `tls.expiry` still reports, because
+the expiry date is readable regardless of trust, and says it covers expiry only.
+
+**Declaring an endpoint by IP has consequences the tool now spells out.** A
+certificate is validated against the address you connect to, so connecting to
+`10.47.0.200` when the certificate is issued for `vc01.gpu.set.lab` fails SAN
+matching even if the certificate is perfectly good. `tls.chain` names the
+mismatch and the hostname to use; `dns.forward` discloses that the endpoint was
+not name-checked at all.
 
 The interactive flow and the config file are the same thing: prompting
 *produces* a config, it is not an alternative to one. That is what keeps

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/netip"
 
+	"github.com/modern-apps-5/vks-inspector/internal/checks"
 	"github.com/modern-apps-5/vks-inspector/internal/config"
 )
 
@@ -19,6 +20,13 @@ type endpoint struct {
 	// Required marks an endpoint the deployment cannot work without, as opposed
 	// to one declared for completeness.
 	Required bool
+	// CredentialRef names the credential entry for this endpoint, so a check
+	// can tell whether TLS verification was disabled for it.
+	CredentialRef string
+	// DeclaredByIP records that only an address was given. Such an endpoint is
+	// invisible to DNS checks, and its certificate is validated against an IP,
+	// which nearly always fails SAN matching — both worth saying out loud.
+	DeclaredByIP bool
 }
 
 // Address returns "host:port", preferring the name so the probe exercises the
@@ -57,6 +65,8 @@ func managementEndpoints(cfg *config.Config) []endpoint {
 		}
 		out = append(out, endpoint{
 			Source: source, Name: ep.FQDN, IP: ep.IP, Port: ep.Port, Required: required,
+			CredentialRef: ep.CredentialRef,
+			DeclaredByIP:  ep.FQDN == "" && ep.IP != "",
 		})
 	}
 
@@ -84,6 +94,17 @@ func managementEndpoints(cfg *config.Config) []endpoint {
 		add(fmt.Sprintf("infrastructure.extra[%d]", i), e, false)
 	}
 	return out
+}
+
+// unverifiedTLS reports whether certificate verification was disabled for this
+// endpoint, which makes any assertion about its chain meaningless.
+func (e endpoint) unverifiedTLS(rc *checks.RunContext) bool {
+	ref := e.CredentialRef
+	if ref == "" {
+		ref = "vcenter"
+	}
+	c, ok := rc.Creds.Get(ref)
+	return ok && c.InsecureSkipVerify
 }
 
 // resolvableNames returns every name that must resolve, with its source.
@@ -128,6 +149,19 @@ func reverseTargets(cfg *config.Config) []namedTarget {
 			continue
 		}
 		out = append(out, namedTarget{Source: e.Source, Name: e.Name, ExpectIP: e.IP})
+	}
+	return out
+}
+
+// ipOnlyEndpoints returns endpoints declared without a name. They are invisible
+// to DNS checks, so a passing DNS result must disclose them or it overstates
+// what it covered.
+func ipOnlyEndpoints(cfg *config.Config) []string {
+	var out []string
+	for _, e := range managementEndpoints(cfg) {
+		if e.DeclaredByIP {
+			out = append(out, e.Source+" ("+e.IP+")")
+		}
 	}
 	return out
 }

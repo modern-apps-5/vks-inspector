@@ -87,10 +87,35 @@ func (c TLSChain) Run(ctx context.Context, rc *checks.RunContext) ([]results.Res
 		}
 
 		switch {
+		case ep.unverifiedTLS(rc):
+			// ADR-0005: disabling verification makes any certificate assertion
+			// meaningless, and the tool says so rather than reporting a pass it
+			// did not earn or a failure it chose not to look for.
+			r.Status = results.StatusSkip
+			r.Severity = results.SeverityInfo
+			r.Observed.Summary = fmt.Sprintf(
+				"certificate presented by %s was NOT verified (verification disabled for this endpoint)",
+				ep.Host())
+			r.Observed.Data["skip_reason"] = "TLS verification disabled"
+			r.Remediation = "This run cannot say whether the chain is valid. Remove " +
+				"insecureSkipVerify for this endpoint, or install its issuing CA, to get a real answer."
 		case !ans.Verified:
 			r.Status = results.StatusFail
 			r.Observed.Summary = fmt.Sprintf("chain for %s does not validate: %v", ep.Host(), ans.VerifyErr)
 			r.Observed.Data["verify_error"] = ans.VerifyErr.Error()
+			// The commonest cause, and one the tool can identify precisely:
+			// connecting by IP to a certificate issued for a name.
+			if ep.DeclaredByIP && len(leaf.DNSNames) > 0 {
+				r.Observed.Summary = fmt.Sprintf(
+					"you connected to %s by IP, but its certificate is issued for %s",
+					ep.IP, strings.Join(leaf.DNSNames, ", "))
+				r.Remediation = fmt.Sprintf(
+					"Declare this endpoint by name (%s) instead of by IP, and make sure that name "+
+						"resolves. A certificate is validated against the address you connect to, so "+
+						"connecting by IP fails SAN matching even when the certificate is perfectly good. "+
+						"If the CA is also untrusted, install it or use --insecure-skip-tls-verify.",
+					leaf.DNSNames[0])
+			}
 		default:
 			r.Status = results.StatusPass
 			r.Observed.Summary = fmt.Sprintf("valid chain, issued by %s, expires %s",
@@ -186,6 +211,12 @@ func (c CertExpiry) Run(ctx context.Context, rc *checks.RunContext) ([]results.R
 			Summary: fmt.Sprintf("expires more than %d days from now", int(certHorizon.Hours()/24)),
 			Data:    map[string]any{"horizon_days": int(certHorizon.Hours() / 24)},
 		}
+		if ep.unverifiedTLS(rc) {
+			// The expiry date is readable regardless of trust, so this check
+			// still means something — but the reader must not take it as any
+			// statement about the chain, which tls.chain could not verify.
+			r.Evidence = map[string]any{"note": "chain was not verified for this endpoint; expiry only"}
+		}
 		r.Observed = results.Value{
 			Data: map[string]any{
 				"not_after":      leaf.NotAfter.UTC().Format(time.RFC3339),
@@ -213,11 +244,16 @@ func (c CertExpiry) Run(ctx context.Context, rc *checks.RunContext) ([]results.R
 	if inspected == 0 {
 		return []results.Result{skip(c.Meta(), rc, "no certificate could be inspected")}, nil
 	}
-	return []results.Result{summaryPass(c.Meta(), rc,
-		fmt.Sprintf("%d certificate(s) valid for more than %d days",
-			inspected, int(certHorizon.Hours()/24)),
-		map[string]any{"certificates_inspected": inspected},
-	)}, nil
+	summary := fmt.Sprintf("%d certificate(s) valid for more than %d days",
+		inspected, int(certHorizon.Hours()/24))
+	data := map[string]any{"certificates_inspected": inspected}
+	// Expiry says nothing about trust. Next to a tls.chain failure on the same
+	// endpoint, a bare pass here reads as "the certificate is fine".
+	if unverified := unverifiedCount(rc, eps); unverified > 0 {
+		summary += fmt.Sprintf("; %d had no verified chain — this covers expiry only", unverified)
+		data["unverified_chains"] = unverified
+	}
+	return []results.Result{summaryPass(c.Meta(), rc, summary, data)}, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -251,6 +287,16 @@ func pinnedThumbprint(rc *checks.RunContext, ep endpoint) string {
 		}
 	}
 	return ""
+}
+
+func unverifiedCount(rc *checks.RunContext, eps []endpoint) int {
+	n := 0
+	for _, ep := range eps {
+		if ep.unverifiedTLS(rc) {
+			n++
+		}
+	}
+	return n
 }
 
 func orUnknown(s string) string {

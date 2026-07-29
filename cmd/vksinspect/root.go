@@ -29,6 +29,8 @@ type globalOpts struct {
 	nonInteractive bool
 	useDefaults    bool
 	saveConfig     string
+	forceOverwrite bool
+	insecureTLS    bool
 	format         string
 	output         string
 	verbose        bool
@@ -53,6 +55,11 @@ func (g *globalOpts) bind(cmd *cobra.Command) {
 		"accept each prompt's illustrative example on Enter. FOR EXERCISING THE CLI ONLY — "+
 			"the answers describe no real environment, yet checks will still run and may report PASS")
 	f.StringVar(&g.saveConfig, "save-config", "", "write the assembled config to this path for non-interactive re-runs")
+	f.BoolVar(&g.forceOverwrite, "force", false, "allow --save-config to overwrite an existing file")
+	f.BoolVar(&g.insecureTLS, "insecure-skip-tls-verify", false,
+		"do not verify management-plane TLS certificates. Needed for the self-signed certs common in "+
+			"labs. Every certificate check for those endpoints is then downgraded to informational, "+
+			"because an unverified connection cannot evidence a valid chain")
 	f.StringVar(&g.credsPath, "credentials", "", "path to a credentials YAML; env vars "+creds.EnvPrefix+"* override it")
 	f.StringVarP(&g.format, "format", "f", "terminal", "output format: "+fmt.Sprint(renderers.Formats()))
 	f.StringVarP(&g.output, "output", "o", "-", "write output to a file instead of stdout")
