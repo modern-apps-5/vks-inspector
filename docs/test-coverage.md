@@ -102,10 +102,36 @@ covered per probe:
 
 ---
 
-## Tier 2 — Recorded API fixtures
+## Tier 2 — API simulator, and recorded fixtures where it falls short
 
-Class (b) checks are tested against **real API responses captured from a lab and
-committed to the repo** under `internal/clients/<component>/testdata/`.
+Class (b) checks are tested against **vcsim**, govmomi's vSphere API simulator,
+which speaks the real SOAP protocol and returns real managed-object shapes.
+
+This is strictly better than the hand-written fixtures originally planned. A
+hand-written fixture tests the parser against *the author's belief* about the
+API — precisely the belief most likely to be wrong. vcsim tests it against an
+independent implementation. Writing these tests immediately caught four defects
+that fixtures would have encoded rather than exposed:
+
+1. finder paths are datacenter-relative, so inventory lookups silently found
+   nothing;
+2. a DVS may be reported as the base type or the VMware subclass, and
+   unmarshalling into the wrong one panics inside the property collector;
+3. `MaxMtu` of 0 means "not populated", not "MTU is zero" — reporting it as a
+   real value would fail an environment whose MTU was never read;
+4. portgroup `name` is not always set (only `config.name`), and an empty name
+   silently matched an empty lookup string — one test was green while proving
+   nothing.
+
+**What vcsim does NOT prove:** that a real vCenter behaves identically, that
+VCF 9 returns these shapes, or anything about authentication — vcsim accepts any
+credentials, so it cannot exercise auth rejection at all. An earlier test
+asserted bad credentials were refused and passed only because the transport was
+misconfigured. Those questions need tier 3.
+
+Recorded fixtures remain the right tool where the simulator does not model a
+surface at all — NSX and ALB have no equivalent — and are stored under
+`internal/clients/<component>/testdata/`.
 
 This is what makes credentialed checks CI-testable without credentials. It is
 also the only honest way to test parsing: a hand-written fixture tests the

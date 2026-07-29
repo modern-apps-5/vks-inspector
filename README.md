@@ -21,15 +21,16 @@ questions. Use `--layer supervisor|vks|both` to narrow. See
 Single static binary. No runtime dependencies. Read-only. No outbound internet
 calls.
 
-> **Status: early.** The interactive flow, the config pipeline and the address-plan
-> checks work end to end. **No network probes and no credentialed checks are
-> implemented yet** — the vCenter, NSX and ALB clients are stubs, so every
-> credentialed check reports as a skip with a reason.
+> **Status: early.** The interactive flow, the config pipeline, the address-plan
+> checks and the vCenter client all work end to end. **No network probes yet**
+> (DNS, TCP, TLS, NTP), and **no NSX or ALB client**, so those checks report as
+> skips with a reason.
 >
-> Implemented: `cidr.overlap`, `cidr.external-collision`, `cidr.infra-collision`,
-> `range.containment`, `meta.topology-recognised`. The remaining checks are
+> Implemented: five config-only checks (CIDR overlap, external collision, infra
+> collision, range containment, topology) and five vCenter checks (API reachable,
+> cluster exists, VDS exists, VDS MTU, portgroups exist). The remaining checks are
 > blocked on review of [docs/REQUIREMENTS-MATRIX.md](docs/REQUIREMENTS-MATRIX.md),
-> 46 of whose 89 rows are flagged as unconfirmed against current VCF 9 / VKS
+> 46 of whose 91 rows are flagged as unconfirmed against current VCF 9 / VKS
 > documentation.
 >
 > **Do not read a passing run as a validated environment.** The tool says so

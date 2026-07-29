@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/modern-apps-5/vks-inspector/internal/clients/vcenter"
 	"github.com/modern-apps-5/vks-inspector/internal/config"
 	"github.com/modern-apps-5/vks-inspector/internal/creds"
 	"github.com/modern-apps-5/vks-inspector/internal/results"
@@ -253,10 +254,18 @@ type Probes interface {
 }
 
 // VCenterClient is the read-only vCenter surface checks may use.
-// TODO(phase-1b): widen as credentialed checks land. Read-only by contract:
-// no method on this interface may mutate vCenter state.
+//
+// An interface rather than the concrete client so a check can be unit-tested
+// with a fake. Read-only by contract: no method here may mutate vCenter state.
 type VCenterClient interface {
+	Endpoint() string
 	About(ctx context.Context) (map[string]any, error)
+	IsVCenter(ctx context.Context) (bool, error)
+	Discover(ctx context.Context) (*vcenter.Inventory, error)
+	Cluster(ctx context.Context, datacenter, name string) (*vcenter.ClusterInfo, error)
+	DistributedSwitch(ctx context.Context, name string) (*vcenter.SwitchInfo, error)
+	PortGroup(ctx context.Context, name string) (*vcenter.PortGroupInfo, error)
+	ClusterHostTime(ctx context.Context, datacenter, cluster string) ([]vcenter.HostTimeInfo, error)
 }
 
 // NSXClient is the read-only NSX Manager surface.

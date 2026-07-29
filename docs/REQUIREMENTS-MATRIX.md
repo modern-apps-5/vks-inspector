@@ -28,7 +28,7 @@ one as "go and find this", not "this was read".
 | `LOW` | Reconstructed or inferred. Assume it is wrong until proven otherwise. |
 
 **Flags.** `⚑` marks a row that must be confirmed before any check is built on
-it. **46 of 89 rows are flagged.** Concentrations of doubt, worst first:
+it. **46 of 91 rows are flagged.** Concentrations of doubt, worst first:
 
 1. **Every VPC row (`VPC-*`)** — VCF 9 VPC-based Supervisor networking is the
    single least-reliable section. The object *names* may be wrong, not just the
@@ -415,6 +415,22 @@ or bites later) · `info` (recorded, never gates).
 - **From the network:** `api`.
 - **Remediation:** Correct the credentials or grant a read role.
 - **Source:** NSX API documentation.
+
+#### `INV-VC-001` · Declared datacenter and cluster exist
+**Topologies** all · **Category** inventory · **Severity** blocker · **Confidence** HIGH · **Flag** —
+- **Expected:** The datacenter and cluster named in the config exist in vCenter.
+- **From the network:** `api`.
+- **Remediation:** Correct `vsphere.datacenter` / `vsphere.cluster`, or create the cluster.
+- **Source:** Trivially true — you cannot enable a Supervisor on a cluster that does not exist.
+- **Note:** added during implementation; the matrix had no row for object existence despite several checks depending on it. A typo here makes every other inventory check inspect the wrong object, so it is a blocker rather than a convenience. Implemented by `vc.cluster-exists`, which also lists the clusters that *do* exist — "not found" alone is a guessing game.
+
+#### `INV-VC-002` · Declared distributed switch exists
+**Topologies** all · **Category** inventory · **Severity** blocker · **Confidence** HIGH · **Flag** —
+- **Expected:** The VDS named in the config exists in vCenter.
+- **From the network:** `api`.
+- **Remediation:** Correct `vsphere.distributedSwitch`, or create the switch.
+- **Source:** As `INV-VC-001`.
+- **Note:** added during implementation. Implemented by `vc.vds-exists`. Useful under NSX too, not only VDS topologies — host uplinks still ride a switch.
 
 #### `COM-VER-001` · vCenter and ESXi versions are supported
 **Topologies** all · **Category** inventory · **Severity** blocker · **Confidence** LOW ⚑ · **Flag** ⚑

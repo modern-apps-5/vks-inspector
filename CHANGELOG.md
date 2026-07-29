@@ -44,16 +44,27 @@ enablement prerequisite or a VKS workload-cluster one. `--layer
 supervisor|vks|both` filters a run. Most checks are Supervisor-layer — there is
 no VKS without a Supervisor.
 
-**Checks (5).** All are pure config arithmetic; no network probe or credentialed
-check is implemented yet.
+**vCenter client and discovery.** `--vcenter` now actually connects. The client
+is read-only — the only write is the session itself, which is closed on exit so
+the tool does not leave sessions accumulating on a customer's vCenter. It reads
+version, datacenters, clusters, hosts, distributed switches, portgroups, and any
+registered NSX Manager. Discovered values pre-fill the question flow and are
+reported rather than asked; a discovered value never overwrites a declared one.
 
-| Check | Requirements |
-|---|---|
-| `cidr.overlap` | `COM-CID-001` |
-| `cidr.external-collision` | `COM-CID-002` |
-| `cidr.infra-collision` | `COM-CID-003` |
-| `range.containment` | `COM-CID-005`, `LB-VIP-001` |
-| `meta.topology-recognised` | `MET-001` |
+**Checks (10).** Five config-only, five requiring vCenter credentials.
+
+| Check | Requirements | Needs |
+|---|---|---|
+| `cidr.overlap` | `COM-CID-001` | — |
+| `cidr.external-collision` | `COM-CID-002` | — |
+| `cidr.infra-collision` | `COM-CID-003` | — |
+| `range.containment` | `COM-CID-005`, `LB-VIP-001` | — |
+| `meta.topology-recognised` | `MET-001` | — |
+| `vc.api-reachable` | `COM-API-001` | vCenter |
+| `vc.cluster-exists` | `INV-VC-001` | vCenter |
+| `vc.vds-exists` | `INV-VC-002` | vCenter |
+| `vc.vds-mtu` | `COM-MTU-003` | vCenter |
+| `vc.portgroup-exists` | `VDS-PG-001/002/003` | vCenter |
 
 **Renderers** — human terminal, JSON, JUnit XML. Renderers are pure: the same
 report produces byte-identical output every time. JSON never omits skipped
@@ -76,7 +87,7 @@ for byte-comparability and the config digest distinguishes "the environment
 changed" from "the declared intent changed". Written now so `snapshot` and
 `drift` have a fixed target.
 
-**Documentation** — `docs/REQUIREMENTS-MATRIX.md` (89 rows, 46 flagged as
+**Documentation** — `docs/REQUIREMENTS-MATRIX.md` (91 rows, 46 flagged as
 unverified), `docs/CHECK-TAXONOMY.md`, `docs/test-coverage.md`, and 14 ADRs.
 
 ### Changed
@@ -135,9 +146,13 @@ unverified), `docs/CHECK-TAXONOMY.md`, `docs/test-coverage.md`, and 14 ADRs.
 
 ### Known limitations
 
-- No network probes and no credentialed checks. The vCenter, NSX and ALB clients
-  are stubs, so every credentialed check reports as a skip with a reason.
-- 46 of 89 requirement rows are flagged as unconfirmed against current VCF 9 /
+- No network probes yet — DNS, TCP, TLS and NTP checks are unimplemented.
+- No NSX or ALB client, so those checks report as skips with a reason.
+- vCenter behaviour is verified against **vcsim**, govmomi's API simulator. That
+  genuinely exercises request construction and response parsing, but it is a
+  model, not a real vCenter, and proves nothing about VCF 9 or real
+  authentication. Live-lab integration tests remain necessary and unwritten.
+- 46 of 91 requirement rows are flagged as unconfirmed against current VCF 9 /
   VKS documentation. Checks are not built on flagged rows.
 - VKS-layer requirement rows are not yet written; the matrix says so explicitly.
 - The interactive prompt flow is now covered (`internal/prompt`), but the

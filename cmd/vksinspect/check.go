@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -9,7 +10,10 @@ import (
 
 	"github.com/modern-apps-5/vks-inspector/internal/checks"
 	"github.com/modern-apps-5/vks-inspector/internal/checks/all"
+	"github.com/modern-apps-5/vks-inspector/internal/clients"
+	vcenterclient "github.com/modern-apps-5/vks-inspector/internal/clients/vcenter"
 	"github.com/modern-apps-5/vks-inspector/internal/config"
+	"github.com/modern-apps-5/vks-inspector/internal/creds"
 	"github.com/modern-apps-5/vks-inspector/internal/engine"
 	"github.com/modern-apps-5/vks-inspector/internal/probes"
 	"github.com/modern-apps-5/vks-inspector/internal/prompt"
@@ -54,36 +58,79 @@ func runMode(cmd *cobra.Command, g *globalOpts, mode checks.Mode) error {
 		return err
 	}
 
-	// Accepting an endpoint and never connecting to it is its own kind of lie.
-	// Until the management-plane clients exist, say so at the point the operator
-	// supplied the address, not only in the report footer.
-	if cfg.Infrastructure.VCenter.FQDN != "" {
-		fmt.Fprintf(os.Stderr,
-			"\n  ⚠ %s was accepted but NOT contacted.\n"+
-				"    The vCenter, NSX and ALB clients are not implemented yet, so every\n"+
-				"    check that would inspect them reports as skipped. This run grades the\n"+
-				"    addressing you declared and nothing else.\n\n",
-			cfg.Infrastructure.VCenter.FQDN)
-	}
+	// Connect what we can. A client that fails to build yields a missing
+	// capability, which yields skipped checks with a reason — never a failed
+	// check. "We could not log in" is a statement about the tool's access, not
+	// about the customer's environment.
+	clientSet, closers := g.buildClients(cmd.Context(), cfg, credSet)
+	defer func() {
+		for _, closeFn := range closers {
+			_ = closeFn(context.WithoutCancel(cmd.Context()))
+		}
+	}()
 
 	rep, err := engine.Run(cmd.Context(), all.Registry(), engine.Options{
 		Mode:     mode,
 		Config:   cfg,
 		Creds:    credSet,
 		Layer:    g.layer,
+		Clients:  clientSet,
 		Probes:   probes.System{},
 		Invasive: g.invasive,
 		Only:     g.only,
 		Skip:     g.skip,
 		Timeout:  g.timeout,
-		// Clients are left nil until the vCenter client lands: every
-		// credentialed check reports as a skip with a reason rather than
-		// pretending to have inspected anything.
 	})
 	if err != nil {
 		return err
 	}
 	return exitWith(g, rep)
+}
+
+// buildClients connects the management-plane clients the config calls for.
+//
+// Failures are reported and swallowed, never fatal: a run without vCenter
+// credentials must still grade the address plan and report the vCenter checks
+// as skips. Returns the client set plus closers, because a session left open on
+// a customer's vCenter is litter.
+func (g *globalOpts) buildClients(ctx context.Context, cfg *config.Config, credSet *creds.Set) (checks.Clients, []func(context.Context) error) {
+	var set checks.Clients
+	var closers []func(context.Context) error
+
+	endpoint := cfg.Infrastructure.VCenter.FQDN
+	if endpoint == "" {
+		return set, closers
+	}
+
+	ref := cfg.Infrastructure.VCenter.CredentialRef
+	if ref == "" {
+		ref = "vcenter"
+	}
+	cred, ok := credSet.Get(ref)
+	if !ok {
+		fmt.Fprintf(os.Stderr,
+			"\n  ⚠ no credentials for %s — vCenter checks will be skipped.\n"+
+				"    Set %sVCENTER_USERNAME and %sVCENTER_PASSWORD, or pass --credentials.\n\n",
+			endpoint, creds.EnvPrefix, creds.EnvPrefix)
+		return set, closers
+	}
+
+	opts := clients.DefaultOptions()
+	opts.Timeout = g.timeout
+	c := vcenterclient.New(endpoint, cred, opts)
+
+	if err := c.Connect(ctx); err != nil {
+		// A connection failure is reported by vc.api-reachable as a finding.
+		// Saying it here too means the operator sees it before the report
+		// scrolls, which matters when it is the reason for ten skips.
+		fmt.Fprintf(os.Stderr, "\n  ⚠ could not connect to %s: %v\n"+
+			"    vCenter checks will be skipped.\n\n", endpoint, err)
+		return set, closers
+	}
+
+	set.VCenter = c
+	closers = append(closers, c.Close)
+	return set, closers
 }
 
 // resolveConfig assembles the config from every source, in precedence order:
@@ -131,11 +178,10 @@ func (g *globalOpts) resolveConfig(cmd *cobra.Command) (*config.Config, error) {
 	p := prompt.New(os.Stdin, os.Stderr, interactive)
 	p.UseExamples = g.useDefaults
 
-	// TODO(next): connect to vCenter here and populate Discovered before
-	// eliciting, so the datacenter, cluster, VDS list and registered NSX
-	// Manager are reported rather than asked for. The seam is in place and
-	// Elicit already renders what it is given.
-	var discovered *prompt.Discovered
+	// Discover before asking, so anything vCenter already knows is reported
+	// rather than typed. Best-effort: any failure falls back to asking, and
+	// never aborts the run. See docs/ADR/0014.
+	discovered := g.discover(cmd.Context(), cfg)
 
 	if err := prompt.Elicit(p, cfg, discovered); err != nil {
 		return nil, err
@@ -165,6 +211,66 @@ func (g *globalOpts) resolveConfig(cmd *cobra.Command) (*config.Config, error) {
 			g.saveConfig, cmd.Name(), g.saveConfig)
 	}
 	return cfg, nil
+}
+
+// discover reads what it can from vCenter to pre-fill the question flow.
+//
+// Returns nil on any failure. Discovery is a convenience; a tool that cannot
+// run without it has made a network call load-bearing for a config-only check.
+func (g *globalOpts) discover(ctx context.Context, cfg *config.Config) *prompt.Discovered {
+	if cfg.Infrastructure.VCenter.FQDN == "" || g.nonInteractive {
+		return nil
+	}
+	credSet, err := g.loadCreds()
+	if err != nil {
+		return nil
+	}
+	ref := cfg.Infrastructure.VCenter.CredentialRef
+	if ref == "" {
+		ref = "vcenter"
+	}
+	cred, ok := credSet.Get(ref)
+	if !ok {
+		return nil
+	}
+
+	opts := clients.DefaultOptions()
+	opts.Timeout = g.timeout
+	c := vcenterclient.New(cfg.Infrastructure.VCenter.FQDN, cred, opts)
+	if err := c.Connect(ctx); err != nil {
+		return nil
+	}
+	defer func() { _ = c.Close(ctx) }()
+
+	inv, err := c.Discover(ctx)
+	if err != nil {
+		return nil
+	}
+
+	d := &prompt.Discovered{
+		VCenterVersion: inv.Version,
+		Switches:       inv.Switches,
+		NSXManager:     inv.NSXManager,
+		Hosts:          inv.HostCount,
+	}
+	// Fill the config only where the operator has not already decided. A
+	// discovered value must never overwrite a declared one.
+	if len(inv.Datacenters) == 1 {
+		d.Datacenter = inv.Datacenters[0]
+		if cfg.VSphere.Datacenter == "" {
+			cfg.VSphere.Datacenter = inv.Datacenters[0]
+		}
+	}
+	if len(inv.Clusters) == 1 {
+		d.Cluster = inv.Clusters[0]
+		if cfg.VSphere.Cluster == "" {
+			cfg.VSphere.Cluster = inv.Clusters[0]
+		}
+	}
+	if len(inv.Switches) == 1 && cfg.VSphere.DistributedSwitch == "" {
+		cfg.VSphere.DistributedSwitch = inv.Switches[0]
+	}
+	return d
 }
 
 // saveConfig writes the assembled config.
