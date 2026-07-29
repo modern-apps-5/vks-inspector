@@ -37,7 +37,7 @@ func TestRunProducesAGradedReport(t *testing.T) {
 	rep, err := engine.Run(context.Background(), all.Registry(), engine.Options{
 		Mode:   checks.ModePreflight,
 		Config: testConfig(),
-		Probes: probes.Fake{},
+		Probes: &probes.Fake{},
 		Now:    fixedNow(),
 	})
 	if err != nil {
@@ -69,7 +69,7 @@ func TestEveryModeRuns(t *testing.T) {
 		t.Run(string(mode), func(t *testing.T) {
 			t.Parallel()
 			rep, err := engine.Run(context.Background(), all.Registry(), engine.Options{
-				Mode: mode, Config: testConfig(), Probes: probes.Fake{}, Now: fixedNow(),
+				Mode: mode, Config: testConfig(), Probes: &probes.Fake{}, Now: fixedNow(),
 			})
 			if err != nil {
 				t.Fatalf("Run: %v", err)
@@ -97,7 +97,7 @@ func TestExcludedChecksAreReportedAsSkips(t *testing.T) {
 	rep, err := engine.Run(context.Background(), reg, engine.Options{
 		Mode:   checks.ModePreflight,
 		Config: testConfig(),
-		Probes: probes.Fake{},
+		Probes: &probes.Fake{},
 		Now:    fixedNow(),
 		Skip:   []string{"meta.topology-recognised"},
 	})
@@ -128,7 +128,7 @@ func TestPanickingCheckBecomesAToolError(t *testing.T) {
 	reg.Register(&panicCheck{})
 
 	rep, err := engine.Run(context.Background(), reg, engine.Options{
-		Mode: checks.ModePreflight, Config: testConfig(), Probes: probes.Fake{}, Now: fixedNow(),
+		Mode: checks.ModePreflight, Config: testConfig(), Probes: &probes.Fake{}, Now: fixedNow(),
 	})
 	if err != nil {
 		t.Fatalf("engine returned an error instead of a result: %v", err)
@@ -149,7 +149,7 @@ func TestSilentCheckBecomesAToolError(t *testing.T) {
 	reg.Register(&silentCheck{})
 
 	rep, err := engine.Run(context.Background(), reg, engine.Options{
-		Mode: checks.ModePreflight, Config: testConfig(), Probes: probes.Fake{}, Now: fixedNow(),
+		Mode: checks.ModePreflight, Config: testConfig(), Probes: &probes.Fake{}, Now: fixedNow(),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -170,7 +170,7 @@ func TestSeverityOverrideIsAppliedAndRecorded(t *testing.T) {
 	}
 
 	rep, err := engine.Run(context.Background(), all.Registry(), engine.Options{
-		Mode: checks.ModePreflight, Config: cfg, Probes: probes.Fake{}, Now: fixedNow(),
+		Mode: checks.ModePreflight, Config: cfg, Probes: &probes.Fake{}, Now: fixedNow(),
 	})
 	if err != nil {
 		t.Fatal(err)

@@ -107,6 +107,49 @@ Supported combinations: `vds+alb`, `vds+haproxy` ⚑, `nsx+nsx-lb`, `nsx+alb`,
 assumed workable. ⚑ marks a combination that works but whose requirement
 coverage is unverified — see the matrix.
 
+## What it checks
+
+18 checks today. Each traces to a row in
+[REQUIREMENTS-MATRIX.md](docs/REQUIREMENTS-MATRIX.md); `vksinspect explain <id>`
+prints the detail.
+
+**Config only** — arithmetic on your declared addressing. No network, no credentials.
+
+| Check | What it does |
+|---|---|
+| `cidr.overlap` | Compares every declared range pairwise; reports each overlapping pair separately |
+| `cidr.external-collision` | Compares declared ranges against `externalCIDRs`; skips (never passes) if that list is empty |
+| `cidr.infra-collision` | Flags a pod/service CIDR that swallows a vCenter, DNS or NTP address the cluster must reach |
+| `range.containment` | Checks each static IP range falls inside its own subnet, and says which end escapes |
+| `meta.topology-recognised` | Confirms the networking × load-balancer combination is one this build can grade |
+
+**Network** — probes from wherever you run it. No credentials. The report records the vantage host.
+
+| Check | What it does |
+|---|---|
+| `dns.forward` | Queries **each declared resolver separately** for every endpoint name; fails if an answer points somewhere other than the declared IP |
+| `dns.reverse` | PTR lookup per endpoint, compared case-insensitively to the forward name; warning unless `requireReverse: true` |
+| `dns.resolver-agreement` | Asks all resolvers the same name and reports disagreement (split-horizon) |
+| `tcp.port-open` | TCP connect per endpoint, **tri-state**: open passes, refused fails, silence is indeterminate — a firewall is not a dead service |
+| `tls.chain` | Handshakes, then verifies the chain explicitly so an invalid cert is inspected rather than hidden behind "connect failed"; honours a pinned thumbprint |
+| `tls.expiry` | Flags any certificate expiring within 90 days; already-expired escalates to blocker |
+| `ntp.reachable` | Real SNTP query on 123/udp — not ping, not curl; fails a source that answers but reports itself unsynchronised |
+| `ntp.skew` | Measures clock offset against each source; skips if you declared no tolerance rather than inventing one |
+
+**vCenter** — needs credentials. Read-only; the session is closed on exit.
+
+| Check | What it does |
+|---|---|
+| `vc.api-reachable` | Logs in and reads `about`; also catches an ESXi host given where a vCenter was meant |
+| `vc.cluster-exists` | Looks up the declared datacenter and cluster, and **lists the ones that do exist** when it misses |
+| `vc.vds-exists` | Same for the distributed switch |
+| `vc.vds-mtu` | Compares VDS MTU against the requirement your config declares; reports `unknown` if vCenter returns no MTU |
+| `vc.portgroup-exists` | One result per declared portgroup: existence, backing switch, and VLAN match (a trunk yields `unknown`, not a false pass) |
+
+**Not implemented yet:** NSX and ALB clients, ICMP/gateway probes, duplicate-IP
+detection, path-MTU discovery, and every check tracing to a flagged matrix row.
+Those report as skips with a reason.
+
 ## Configuration
 
 One declarative YAML document describes the intended topology and addressing. It

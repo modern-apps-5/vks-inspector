@@ -54,6 +54,8 @@ Everything that is arithmetic, parsing, formatting or dispatch.
 | Address arithmetic | `internal/netx/netx_test.go` | Overlap, containment, range sizing — including the off-by-one family: adjacency, single-address touch, /31, /32, IPv4-vs-IPv6, host bits set, IPv6 counts exceeding int64 |
 | Prompt primitives | `internal/prompt/prompt_test.go` | Optional vs required lists; examples in labels; validators normalise and re-prompt; non-interactive errors rather than defaulting; lazy section headings |
 | Answer normalisers | `internal/prompt/elicit_internal_test.go` | Bare address → `/32`; host-bits-set refused with the masked form named; strict-vs-lenient CIDR |
+| Network checks | `internal/checks/network/network_test.go` | All eight, via `probes.Fake`: DNS timeout vs NXDOMAIN, wrong-address resolution, per-resolver querying, PTR case-folding, config-driven severity escalation, TCP tri-state mapping, unsynchronised NTP sources, skew in both directions |
+| vCenter checks | `internal/checks/vcenter/vcenter_test.go` | All five against vcsim, end to end through real SOAP |
 | Address-plan checks | `internal/checks/configval/cidr_test.go` | All four implemented checks: overlap, external collision, infra collision, containment; the fan-out idiom; skip-not-pass when there is nothing to compare |
 
 ### The two patterns, already established

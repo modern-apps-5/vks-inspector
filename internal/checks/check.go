@@ -25,6 +25,7 @@ import (
 	"github.com/modern-apps-5/vks-inspector/internal/clients/vcenter"
 	"github.com/modern-apps-5/vks-inspector/internal/config"
 	"github.com/modern-apps-5/vks-inspector/internal/creds"
+	"github.com/modern-apps-5/vks-inspector/internal/probes"
 	"github.com/modern-apps-5/vks-inspector/internal/results"
 )
 
@@ -245,13 +246,10 @@ type Clients struct {
 	ALB     ALBClient
 }
 
-// Probes is the network probe surface. Same reasoning as Clients.
-type Probes interface {
-	// Marker method; the real surface is defined in internal/probes and this
-	// interface will be widened as probes land. Kept deliberately narrow now so
-	// the shape is provable without pretending the probes exist.
-	ProbeKinds() []string
-}
+// Probes is the network probe surface. Same reasoning as Clients: an interface
+// so the whole class-(a) suite is testable with a fake, on a laptop, with no
+// network. Defined in internal/probes.
+type Probes = probes.Prober
 
 // VCenterClient is the read-only vCenter surface checks may use.
 //

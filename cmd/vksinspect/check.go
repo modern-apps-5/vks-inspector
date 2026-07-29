@@ -75,7 +75,7 @@ func runMode(cmd *cobra.Command, g *globalOpts, mode checks.Mode) error {
 		Creds:    credSet,
 		Layer:    g.layer,
 		Clients:  clientSet,
-		Probes:   probes.System{},
+		Probes:   probes.System{Timeout: g.timeout},
 		Invasive: g.invasive,
 		Only:     g.only,
 		Skip:     g.skip,

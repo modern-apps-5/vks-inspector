@@ -51,7 +51,13 @@ version, datacenters, clusters, hosts, distributed switches, portgroups, and any
 registered NSX Manager. Discovered values pre-fill the question flow and are
 reported rather than asked; a discovered value never overwrites a declared one.
 
-**Checks (10).** Five config-only, five requiring vCenter credentials.
+**Network probes.** DNS (forward, reverse, cross-resolver agreement), TCP
+tri-state connect, TLS chain inspection and expiry, and real SNTP. Confined to
+`internal/probes` behind an interface, so the whole class-(a) suite is testable
+with a fake — no network, no lab, runs in CI.
+
+**Checks (18).** Five config-only, eight network, five requiring vCenter
+credentials. See the README for a one-line description of each.
 
 | Check | Requirements | Needs |
 |---|---|---|
@@ -65,6 +71,14 @@ reported rather than asked; a discovered value never overwrites a declared one.
 | `vc.vds-exists` | `INV-VC-002` | vCenter |
 | `vc.vds-mtu` | `COM-MTU-003` | vCenter |
 | `vc.portgroup-exists` | `VDS-PG-001/002/003` | vCenter |
+| `dns.forward` | `COM-DNS-001` | network |
+| `dns.reverse` | `COM-DNS-002` | network |
+| `dns.resolver-agreement` | `COM-DNS-005` | network |
+| `tcp.port-open` | `COM-FW-001/002` | network |
+| `tls.chain` | `COM-CRT-001/002` | network |
+| `tls.expiry` | `COM-CRT-003` | network |
+| `ntp.reachable` | `COM-NTP-001` | network |
+| `ntp.skew` | `COM-NTP-002` | network |
 
 **Renderers** — human terminal, JSON, JUnit XML. Renderers are pure: the same
 report produces byte-identical output every time. JSON never omits skipped
@@ -146,8 +160,12 @@ unverified), `docs/CHECK-TAXONOMY.md`, `docs/test-coverage.md`, and 14 ADRs.
 
 ### Known limitations
 
-- No network probes yet — DNS, TCP, TLS and NTP checks are unimplemented.
 - No NSX or ALB client, so those checks report as skips with a reason.
+- No ICMP, duplicate-IP or path-MTU probes — all need raw sockets, and the
+  privilege-degradation path is unwritten.
+- Probes run only from wherever the tool is invoked. Several requirements need a
+  specific vantage (the workload segment, outside the segment) and the tool
+  cannot yet be told it is standing somewhere else.
 - vCenter behaviour is verified against **vcsim**, govmomi's API simulator. That
   genuinely exercises request construction and response parsing, but it is a
   model, not a real vCenter, and proves nothing about VCF 9 or real
