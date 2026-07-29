@@ -23,3 +23,7 @@ advertising, not a record.
 | [0008](0008-requirements-matrix-authority.md) | The requirements matrix is the source of truth | Accepted |
 | [0009](0009-baseline-artifact.md) | A baseline is a Report, not a second format | Accepted |
 | [0010](0010-explicit-check-registration.md) | Explicit registration, no `init()` magic | Accepted |
+| [0011](0011-topology-axes.md) | Topology is orthogonal axes, not a flat enum | Accepted |
+| [0012](0012-supervisor-vks-layers.md) | Requirements are tagged Supervisor or VKS | Accepted |
+| [0013](0013-prompting-produces-config.md) | Prompting produces a config, not an alternative to one | Accepted |
+| [0014](0014-vcenter-first-discovery.md) | vCenter is the entry point; discover the rest | Accepted, partly implemented |

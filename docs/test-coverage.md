@@ -50,7 +50,9 @@ Everything that is arithmetic, parsing, formatting or dispatch.
 | Credential safety | `internal/creds/creds_test.go` | Redaction under `%v %s %+v %#v %q`; refusal to marshal; env-over-file precedence; refusal to read a 0644 file |
 | Registry selection | `internal/registry/registry_test.go` | Mode, topology, `--only`, `--skip`; every check accounted for; registration guards |
 | Engine behaviour | `internal/engine/engine_test.go` | End-to-end run; every mode; panics and silent checks become tool errors; skips carry reasons; severity overrides recorded |
-| Reference check | `internal/checks/reference/reference_test.go` | Identical behaviour in all three modes; machine-comparable observations; injected clock |
+| Reference check | `internal/checks/reference/reference_test.go` | Identical behaviour in all three modes; machine-comparable observations; injected clock; unsupported axis combinations rejected |
+| Address arithmetic | `internal/netx/netx_test.go` | Overlap, containment, range sizing — including the off-by-one family: adjacency, single-address touch, /31, /32, IPv4-vs-IPv6, host bits set, IPv6 counts exceeding int64 |
+| Address-plan checks | `internal/checks/configval/cidr_test.go` | All four implemented checks: overlap, external collision, infra collision, containment; the fan-out idiom; skip-not-pass when there is nothing to compare |
 
 ### The two patterns, already established
 
@@ -210,6 +212,15 @@ Honest list, as of the phase-1 scaffold:
    form — see the `explain` TODO.
 4. **No fuzz testing of the config parser.** Worth adding once the schema
    settles; a malformed config should never panic.
+6. **Nothing tests the interactive prompt flow.** `internal/prompt` is exercised
+   manually with a scripted PTY. It should have a test driving a full question
+   sequence through a scripted reader and asserting the assembled config —
+   including that `--non-interactive` errors rather than defaulting, and that a
+   value already present is never re-asked. This is the largest untested surface
+   in the tool.
+7. **Nothing tests `--save-config` round-tripping.** The saved file is re-read
+   in manual testing, but no test asserts that
+   prompt → config → YAML → load → identical config holds.
 5. **`internal/config.assertNoSecrets` is effectively unreachable** in normal
    use, because `yaml.KnownFields(true)` rejects unknown keys first. It is a
    belt-and-braces guard against a future struct field reintroducing a

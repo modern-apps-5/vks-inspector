@@ -3,20 +3,36 @@
 Establishes ground truth about the networking underlying a VMware vSphere
 Kubernetes Service (VKS) environment.
 
-Point it at a declarative description of the environment you intend to build and
-it tells you, before you start, which networking prerequisites hold and which do
-not — with the requirement each finding traces to, what was expected, what was
-actually observed, and what to do about it.
+Point it at a vCenter. It asks what it needs to know, interrogates the
+environment, and tells you whether it is ready — with the requirement each
+finding traces to, what was expected, what was actually observed, and what to do
+about it.
+
+```
+vksinspect check --vcenter vcenter.corp.local
+```
+
+**Most of what it checks are Supervisor enablement prerequisites**, not VKS
+cluster ones. There is no VKS without a Supervisor, so the majority of "is this
+ready for VKS" questions are really "can the Supervisor be enabled here"
+questions. Use `--layer supervisor|vks|both` to narrow. See
+[ADR-0012](docs/ADR/0012-supervisor-vks-layers.md).
 
 Single static binary. No runtime dependencies. Read-only. No outbound internet
 calls.
 
-> **Status: phase 1 scaffold.** The skeleton compiles, runs and produces output
-> through one reference check. **No real networking checks are implemented yet** —
-> they are blocked on review of
-> [docs/REQUIREMENTS-MATRIX.md](docs/REQUIREMENTS-MATRIX.md), 46 of whose 88 rows
-> are flagged as unconfirmed against current VCF 9 / VKS documentation. Do not
-> read a passing run as a validated environment.
+> **Status: early.** The interactive flow, the config pipeline and the address-plan
+> checks work end to end. **No network probes and no credentialed checks are
+> implemented yet** — the vCenter, NSX and ALB clients are stubs, so every
+> credentialed check reports as a skip with a reason.
+>
+> Implemented: `cidr.overlap`, `cidr.external-collision`, `cidr.infra-collision`,
+> `range.containment`, `meta.topology-recognised`. The remaining checks are
+> blocked on review of [docs/REQUIREMENTS-MATRIX.md](docs/REQUIREMENTS-MATRIX.md),
+> 46 of whose 89 rows are flagged as unconfirmed against current VCF 9 / VKS
+> documentation.
+>
+> **Do not read a passing run as a validated environment.**
 
 ---
 
@@ -24,10 +40,22 @@ calls.
 
 ```bash
 make build
-./vksinspect check --config config/example.yaml
-./vksinspect check --config config/example.yaml --format json
+
+# interactive: asks for what it cannot discover, saves the answers
+./vksinspect check --vcenter vcenter.corp.local --save-config lab01.yaml
+
+# non-interactive: same checks, no questions. This is the pipeline form.
+./vksinspect check --config lab01.yaml
+./vksinspect check --config lab01.yaml --format json
+
 ./vksinspect explain
 ```
+
+The interactive flow and the config file are the same thing: prompting
+*produces* a config, it is not an alternative to one. That is what keeps
+`verify`, `snapshot` and `drift` — which run in pipelines and cannot prompt —
+grading against the same declared intent. See
+[ADR-0013](docs/ADR/0013-prompting-produces-config.md).
 
 ---
 
@@ -62,19 +90,26 @@ assert a failure it did not observe.
 
 ## Supported topologies
 
-| Key | Topology |
-|---|---|
-| `nsx` | Supervisor on NSX networking |
-| `nsx-alb` | Supervisor on NSX networking with NSX Advanced Load Balancer |
-| `vds-alb` | Supervisor on vSphere (VDS) networking with NSX Advanced Load Balancer |
-| `vds-haproxy` | Supervisor on vSphere (VDS) networking with HAProxy — **legacy, believed removed in VCF 9** |
-| `nsx-vpc` | VPC-based NSX networking (VCF 9) — **lowest-confidence requirement coverage** |
+Topology is two independent axes, because they are two independent decisions and
+requirements attach to whichever one they actually depend on.
+
+| `networking` | | `loadBalancer` | |
+|---|---|---|---|
+| `vds` | vSphere Distributed Switch | `nsx-lb` | the NSX built-in load balancer |
+| `nsx` | NSX | `alb` | NSX Advanced Load Balancer (Avi) |
+| `nsx-vpc` | NSX VPC-based (VCF 9) ⚑ | `haproxy` | HAProxy ⚑ *legacy* |
+
+Supported combinations: `vds+alb`, `vds+haproxy` ⚑, `nsx+nsx-lb`, `nsx+alb`,
+`nsx-vpc+nsx-lb` ⚑, `nsx-vpc+alb` ⚑. Anything else is rejected rather than
+assumed workable. ⚑ marks a combination that works but whose requirement
+coverage is unverified — see the matrix.
 
 ## Configuration
 
 One declarative YAML document describes the intended topology and addressing. It
 drives every mode — preflight, verify, snapshot and the future UI — so that all
-of them grade against the same stated intent.
+of them grade against the same stated intent. Write it by hand, or let
+`--save-config` produce it from the interactive flow.
 
 See [config/example.yaml](config/example.yaml).
 

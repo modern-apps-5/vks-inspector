@@ -28,7 +28,7 @@ one as "go and find this", not "this was read".
 | `LOW` | Reconstructed or inferred. Assume it is wrong until proven otherwise. |
 
 **Flags.** `⚑` marks a row that must be confirmed before any check is built on
-it. **46 of 88 rows are flagged.** Concentrations of doubt, worst first:
+it. **46 of 89 rows are flagged.** Concentrations of doubt, worst first:
 
 1. **Every VPC row (`VPC-*`)** — VCF 9 VPC-based Supervisor networking is the
    single least-reliable section. The object *names* may be wrong, not just the
@@ -51,25 +51,33 @@ one where the failure mode of being wrong is low (a generic networking fact). No
 row in this file has been confirmed against a product document.
 
 **Contradiction with the brief, flagged rather than silently resolved.** The
-brief lists four topologies; the existing README lists four *different* ones,
-including `NSX + AVI`, which the brief omits. This matrix covers the **union**
-of both — five topologies. `NSX + ALB` is a real supported shape and dropping it
-because the brief did not name it would be a silent scope decision. If it is
-genuinely out of scope, say so and it will be removed along with the
-`nsx-alb` topology constant.
+brief listed four topologies; the original README listed four *different* ones,
+including `NSX + AVI`, which the brief omitted. This matrix covers the **union**.
+`NSX + ALB` is a real supported shape and dropping it because the brief did not
+name it would be a silent scope decision.
 
 ---
 
 ## Topology keys
 
-| Key | Meaning |
+The code models topology as two orthogonal axes
+([ADR-0011](ADR/0011-topology-axes.md)); the rows below still use the older flat
+names in their **Topologies** field. The mapping is:
+
+| Row says | Means |
 |---|---|
-| `nsx` | Supervisor on NSX networking, NSX-provided L4 load balancing |
-| `nsx-alb` | Supervisor on NSX networking with NSX Advanced Load Balancer ⚑ *(not in the brief; see above)* |
-| `vds-alb` | Supervisor on vSphere (VDS) networking with NSX Advanced Load Balancer |
-| `vds-haproxy` | Supervisor on vSphere (VDS) networking with HAProxy ⚑ *(believed removed in VCF 9)* |
-| `nsx-vpc` | VPC-based NSX networking, VCF 9 ⚑ *(lowest confidence section)* |
-| `all` | Applies to every topology |
+| `nsx` | `networking=nsx`, `loadBalancer=nsx-lb` |
+| `nsx-alb` | `networking=nsx`, `loadBalancer=alb` |
+| `vds-alb` | `networking=vds`, `loadBalancer=alb` |
+| `vds-haproxy` ⚑ | `networking=vds`, `loadBalancer=haproxy` *(believed removed in VCF 9)* |
+| `nsx-vpc` ⚑ | `networking=nsx-vpc`, either load balancer *(lowest confidence section)* |
+| `all` | every combination |
+
+**⚑ Docs debt:** re-expressing every row in terms of axes is outstanding. Where a
+row says "nsx, nsx-alb" it almost always means "networking=nsx, any load
+balancer", and a row saying "vds-alb, vds-haproxy" almost always means
+"networking=vds". Worth doing when the rows are confirmed, since many will change
+anyway.
 
 ## Verifiability keys
 
@@ -346,6 +354,14 @@ or bites later) · `info` (recorded, never gates).
 - **Remediation:** Widen the range before deploying.
 - **Source:** Address-planning tables in the Supervisor / VKS prerequisites.
 - **⚑ Confirm every number.** Minimum prefix sizes per role (pod, service, ingress, egress, management, workload) are **not** supplied by this document. They are version-specific and are exactly the kind of value that must not be guessed. Until confirmed, this check should be implemented as data-driven with the minimums supplied by the reviewer, not baked into Go.
+
+#### `COM-CID-005` · Declared ranges sit inside their own subnet
+**Topologies** all · **Category** cidr · **Severity** blocker · **Confidence** HIGH · **Flag** —
+- **Expected:** Every declared static address range falls entirely within the CIDR of the network it belongs to.
+- **From the network:** `cfg`.
+- **Remediation:** Correct the range or the CIDR. A range extending past its subnet boundary yields addresses that are unreachable from the segment they were allocated on.
+- **Source:** Arithmetic.
+- **Note:** added during implementation. `LB-VIP-001` covers the VIP-specific case the product documentation calls out; this row covers the identical arithmetic for management, workload and SE data ranges, which the matrix previously had no row for. Implemented by `range.containment`.
 
 #### `COM-ADR-001` · Declared static ranges are actually free
 **Topologies** all · **Category** ippool · **Severity** blocker · **Confidence** HIGH · **Flag** ⚑
@@ -824,6 +840,36 @@ or bites later) · `info` (recorded, never gates).
 - **From the network:** `api` (vCenter).
 - **Remediation:** Reattach the interfaces.
 - **Source:** HAProxy-for-Supervisor deployment guidance.
+
+---
+
+## Layer: Supervisor vs VKS
+
+Added after the matrix was first written, and it changes how the whole document
+should be read. See [ADR-0012](ADR/0012-supervisor-vks-layers.md).
+
+**The overwhelming majority of these rows are Supervisor enablement
+prerequisites, not VKS workload-cluster ones.** There is no VKS without a
+Supervisor, so most of what an operator means by "is this ready for VKS" is
+really "can the Supervisor be enabled here". Every `COM-*`, `SUP-*`, `NSX-*`,
+`VPC-*`, `VDS-*` and `LB-*` row above is Supervisor-layer unless stated
+otherwise.
+
+The genuinely VKS-layer requirements are a much smaller set and are **not yet
+written up as rows**. They are, at minimum:
+
+- TKr / content library availability and reachability from the workload network
+- workload node address-range sizing per cluster, including upgrade headroom
+- per-cluster LoadBalancer-Service VIP consumption
+- namespace-level network policy and storage class prerequisites
+
+**⚑ This is a known gap in the matrix, not a claim that the list is short.**
+Adding these rows is outstanding work. Checks already carry a `Layer` field and
+`--layer supervisor|vks|both` already filters, so the mechanism is in place and
+waiting for content.
+
+Individual rows above have **not** been re-annotated with an explicit layer tag.
+That is docs debt tracked in CLAUDE.md.
 
 ---
 
