@@ -1,0 +1,13 @@
+LICENSE PLACEHOLDER
+
+Copyright (c) 2026 modern-apps-5
+
+The license for vks-inspector has not been chosen yet. Until this file is
+replaced with a real license text, no license is granted and default
+copyright applies.
+
+TODO: replace with the chosen license (Apache-2.0 and MPL-2.0 are the usual
+candidates for a customer-facing VMware-ecosystem tool; Apache-2.0 if the
+tool may be redistributed inside a vendor bundle, MPL-2.0 if reciprocal
+obligations on modifications are wanted). Update the SPDX header in
+cmd/vksinspect/main.go at the same time.

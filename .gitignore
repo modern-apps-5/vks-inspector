@@ -1,0 +1,30 @@
+# Build output
+/dist/
+/vksinspect
+*.exe
+
+# Test / coverage
+*.out
+*.test
+/coverage.html
+
+# Credentials — never commit. See docs/ADR/0005-credential-handling.md
+credentials.yaml
+credentials.yml
+*.credentials.yaml
+.env
+.env.*
+
+# Local artifacts produced by the tool
+*.baseline.json
+/baselines/
+/reports/
+
+# Local agent/tooling state (not project content)
+.ijfw/
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
