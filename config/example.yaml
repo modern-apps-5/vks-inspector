@@ -1,0 +1,241 @@
+# vksinspect environment config — declared intent for one VKS environment.
+#
+# This file describes what the environment is SUPPOSED to be. The same document
+# drives every mode:
+#   check     compares it against the network before anything is deployed
+#   verify    compares it against what actually got built
+#   snapshot  records it alongside the observations of the day
+#   serve     renders it in the UI
+#
+# It contains NO credentials and NO run options. Credentials come from a
+# separate file or from VKSINSPECT_* environment variables; run options are
+# flags. See config/credentials.example.yaml.
+#
+# Values below are illustrative RFC 5737 / RFC 1918 documentation addresses.
+# Sizing rules referenced in comments are flagged in docs/REQUIREMENTS-MATRIX.md
+# and must be confirmed before they are trusted.
+
+apiVersion: vksinspect/v1alpha1
+kind: EnvironmentSpec
+
+metadata:
+  name: lab-nsx-01
+  site: "Amsterdam DC1"
+  description: "Supervisor on NSX networking, single cluster"
+  labels:
+    owner: platform-team
+    stage: lab
+
+# One of: nsx | nsx-alb | vds-alb | vds-haproxy | nsx-vpc
+# This selects which requirement rows apply. Everything below is interpreted
+# through it.
+topology: nsx
+
+infrastructure:
+  vcenter:
+    fqdn: vcenter.lab.example.com
+    ip: 192.0.2.10
+    port: 443
+    # credentialRef points at a key in the credentials file / env namespace.
+    # It is a reference, never a secret.
+    credentialRef: vcenter
+    # Optional: pin the certificate instead of only validating the chain.
+    # expectedThumbprint: "AA:BB:CC:..."
+
+  nsxManager:
+    fqdn: nsx.lab.example.com
+    ip: 192.0.2.11
+    port: 443
+    credentialRef: nsx
+
+  # Listing ESXi hosts lets the tool check per-host DNS, NTP and time skew.
+  # Optional: with vCenter credentials the host list can be discovered instead.
+  esxiHosts:
+    - fqdn: esx01.lab.example.com
+      ip: 192.0.2.21
+    - fqdn: esx02.lab.example.com
+      ip: 192.0.2.22
+    - fqdn: esx03.lab.example.com
+      ip: 192.0.2.23
+
+  # The image registry the deployment pulls from. In a dark site this is a
+  # local Harbor; the tool checks reachability of whatever is declared and
+  # never reaches out to the internet itself.
+  registry:
+    fqdn: harbor.lab.example.com
+    port: 443
+
+  # proxy:
+  #   https: http://proxy.lab.example.com:3128
+  #   noProxy: ["10.0.0.0/8", ".lab.example.com"]
+
+services:
+  dns:
+    servers:
+      - 192.0.2.53
+      - 192.0.2.54
+    searchDomains:
+      - lab.example.com
+    # Supervisor and NSX are sensitive to reverse resolution. Set true to make
+    # a missing/mismatched PTR a blocker rather than a warning.
+    requireReverse: true
+    additionalNames:
+      - supervisor.lab.example.com
+
+  ntp:
+    servers:
+      - 192.0.2.123
+      - 192.0.2.124
+    # FLAGGED: 30s is a field heuristic inherited from the previous
+    # test-coverage doc, not a sourced product requirement. It is configurable
+    # here so the tool does not hardcode an unsourced threshold.
+    # See docs/REQUIREMENTS-MATRIX.md row COM-NTP-002.
+    maxSkewSeconds: 30
+
+vsphere:
+  datacenter: DC1
+  cluster: Compute-01
+  # Required for VDS topologies; still useful under NSX for host uplink checks.
+  distributedSwitch: DSwitch-01
+  storagePolicy: vsan-default
+  contentLibrary: tkr-library
+
+networks:
+  # The Supervisor control plane VMs live here.
+  management:
+    name: management
+    portGroup: PG-Mgmt
+    vlan: 100
+    cidr: 192.0.2.0/24
+    gateway: 192.0.2.1
+    mtu: 1500
+    routable: true
+    ranges:
+      # FLAGGED: the "5 consecutive addresses" rule (1 floating + 3 nodes +
+      # 1 for rolling upgrade) is carried forward from the vSphere with Tanzu
+      # era. Confirm it still holds for the VCF 9 Supervisor before treating
+      # a shorter range as a blocker. Matrix row SUP-MGT-001.
+      - start: 192.0.2.30
+        end: 192.0.2.34
+        purpose: supervisor-control-plane
+
+  # Under NSX, workload networking is derived from namespace segments rather
+  # than declared portgroups — leave portGroup empty and let the NSX blocks
+  # below describe the address plan. Under VDS topologies this is where the
+  # Supervisor and TKG node interfaces land, and portGroup is required.
+  workload:
+    - name: workload-primary
+      cidr: 10.20.0.0/16
+      gateway: 10.20.0.1
+      mtu: 1500
+      routable: true
+
+  # Frontend / VIP network. Required for ALB and HAProxy topologies.
+  # Not used under plain NSX, where ingressCIDR plays this role.
+  # frontend:
+  #   name: frontend
+  #   portGroup: PG-Frontend
+  #   vlan: 102
+  #   cidr: 198.51.100.0/24
+  #   gateway: 198.51.100.1
+  #   routable: true
+  #   ranges:
+  #     - start: 198.51.100.100
+  #       end: 198.51.100.200
+  #       purpose: load-balancer-vips
+
+kubernetes:
+  # Cluster-internal, normally non-routable — but still must not collide with
+  # anything the cluster has to reach.
+  podCIDRs:
+    - 10.244.0.0/20
+  serviceCIDR: 10.96.0.0/22
+
+  # NSX-topology concepts. Ingress = LB VIPs, Egress = SNAT addresses.
+  # FLAGGED: sizing guidance (historically ~1 SNAT IP per namespace) needs
+  # confirmation for VCF 9. Matrix rows NSX-ING-002 / NSX-EGR-002.
+  ingressCIDR: 198.51.100.0/24
+  egressCIDR: 203.0.113.0/24
+
+  apiServerVIP: 192.0.2.30
+
+  # Ranges outside this deployment that the address plan must not collide
+  # with. Overlap math is only ever as good as this list — an empty list means
+  # the tool can only find self-collisions.
+  externalCIDRs:
+    - 10.0.0.0/8
+    - 172.16.0.0/12
+
+nsx:
+  tier0Gateway: T0-Edge-01
+  edgeCluster: EdgeCluster-01
+  transportZone: TZ-Overlay
+  # Minimum MTU on the physical underlay carrying Geneve encapsulation.
+  # FLAGGED: 1600 is the long-standing minimum; VCF 9 guidance may differ and
+  # 9000 is commonly recommended in practice. Matrix row COM-MTU-001.
+  overlayMTU: 1700
+
+  # VPC-based networking (VCF 9). Only for topology: nsx-vpc.
+  # LOW CONFIDENCE — the field names below are provisional and must be
+  # reconciled with the real VCF 9 NSX VPC object model before use.
+  # vpc:
+  #   connectivityProfile: default-connectivity-profile
+  #   transitGateway: default-tgw
+  #   privateIPBlocks: ["10.30.0.0/16"]
+  #   publicIPBlocks: ["198.51.100.0/24"]
+
+# Only for topology: vds-alb or nsx-alb.
+# alb:
+#   controller:
+#     fqdn: avi.lab.example.com
+#     port: 443
+#     credentialRef: alb
+#   controllerCluster: ["192.0.2.41", "192.0.2.42", "192.0.2.43"]
+#   cloud: Default-Cloud
+#   serviceEngineGroup: Default-Group
+#   licenseTier: ENTERPRISE   # FLAGGED: confirm required tier for VKS on VCF 9
+#   vipNetwork:
+#     name: alb-vip
+#     portGroup: PG-Frontend
+#     cidr: 198.51.100.0/24
+#     gateway: 198.51.100.1
+#     routable: true
+#     ranges:
+#       - start: 198.51.100.100
+#         end: 198.51.100.200
+#         purpose: load-balancer-vips
+#   seDataNetwork:
+#     name: alb-se-data
+#     portGroup: PG-SE-Data
+#     cidr: 198.51.100.0/24
+
+# Only for topology: vds-haproxy.
+# FLAGGED: believed deprecated/removed in the VCF 9 generation. Matrix group LB-HAP.
+# haproxy:
+#   appliance:
+#     fqdn: haproxy.lab.example.com
+#     credentialRef: haproxy
+#   dataPlanePort: 5556
+#   loadBalancerCIDR: 198.51.100.0/24
+#   caCertRef: /etc/vksinspect/haproxy-ca.pem
+
+# Intended size. Pool-sizing checks are arithmetic against these numbers, which
+# is why they are declared rather than discovered — the whole point of preflight
+# is to catch an undersized pool before it is undersized in production.
+scale:
+  supervisorControlPlaneNodes: 3
+  expectedNamespaces: 20
+  expectedWorkloadClusters: 5
+  expectedNodesPerCluster: 6
+  expectedLoadBalancerServices: 30
+  growthHeadroomPercent: 30
+
+# Grading policy. Overrides live here rather than in flags so that a site's
+# standing decision is recorded in the config — and therefore in every baseline
+# — instead of living in someone's shell history.
+policy:
+  severityOverrides: {}
+  #   COM-NTP-002: warning
+  skip: []
+  #   - mtu.path
+  allowInvasive: false
