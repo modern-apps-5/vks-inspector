@@ -31,9 +31,13 @@ With no argument, lists everything this build knows about.`,
 			reg := all.Registry()
 
 			if len(args) == 0 {
-				fmt.Fprintf(os.Stdout, "Topologies:\n")
-				for _, t := range config.AllTopologies {
-					fmt.Fprintf(os.Stdout, "  %-12s %s\n", t, t.Description())
+				fmt.Fprintf(os.Stdout, "Supported topologies (networking + load balancer):\n")
+				for _, t := range config.SupportedCombinations() {
+					line := fmt.Sprintf("  %-16s %s", t.String(), t.Description())
+					if note := t.Note(); note != "" {
+						line += "\n                   ⚑ " + note
+					}
+					fmt.Fprintln(os.Stdout, line)
 				}
 				fmt.Fprintf(os.Stdout, "\nChecks in this build (%d):\n", reg.Len())
 				for _, c := range reg.All() {
@@ -57,12 +61,9 @@ With no argument, lists everything this build knows about.`,
 				fmt.Fprintf(os.Stdout, "  category      %s\n", m.Category)
 				fmt.Fprintf(os.Stdout, "  severity      %s\n", m.Severity)
 				fmt.Fprintf(os.Stdout, "  requirements  %s\n", strings.Join(m.RequirementIDs, ", "))
+				fmt.Fprintf(os.Stdout, "  layer         %s\n", m.EffectiveLayer())
 				fmt.Fprintf(os.Stdout, "  modes         %v\n", m.Modes)
-				if len(m.Topologies) == 0 {
-					fmt.Fprintf(os.Stdout, "  topologies    all\n")
-				} else {
-					fmt.Fprintf(os.Stdout, "  topologies    %v\n", m.Topologies)
-				}
+				fmt.Fprintf(os.Stdout, "  applies to    %s\n", m.Applies.Describe())
 				if m.Invasive {
 					fmt.Fprintf(os.Stdout, "  invasive      yes — requires --invasive\n")
 				}

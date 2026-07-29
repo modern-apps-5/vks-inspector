@@ -25,9 +25,12 @@ import (
 
 // Options configure a run.
 type Options struct {
-	Mode     checks.Mode
-	Config   *config.Config
-	Creds    *creds.Set
+	Mode   checks.Mode
+	Config *config.Config
+	Creds  *creds.Set
+	// Layer restricts the run to Supervisor-enablement or VKS-cluster
+	// prerequisites. Empty means both.
+	Layer    results.Layer
 	Clients  checks.Clients
 	Probes   checks.Probes
 	Invasive bool
@@ -85,6 +88,7 @@ func Run(ctx context.Context, reg *registry.Registry, opts Options) (*results.Re
 	decisions := reg.Select(registry.Selector{
 		Mode:     opts.Mode,
 		Topology: opts.Config.Topology,
+		Layer:    layerOrBoth(opts.Layer),
 		Only:     opts.Only,
 		Skip:     skip,
 	})
@@ -119,7 +123,8 @@ func Run(ctx context.Context, reg *registry.Registry, opts Options) (*results.Re
 	finished := now()
 	run := results.RunInfo{
 		Mode:         string(opts.Mode),
-		Topology:     string(opts.Config.Topology),
+		Topology:     opts.Config.Topology.String(),
+		Layer:        string(layerOrBoth(opts.Layer)),
 		ConfigDigest: opts.Config.Digest(),
 		Vantage:      vantage,
 		Invasive:     rc.Invasive,
@@ -185,6 +190,13 @@ func skipResult(m checks.Meta, rc *checks.RunContext, reason string) results.Res
 	r.Expected = results.Text(m.Title)
 	checks.Finish(rc, &r)
 	return r
+}
+
+func layerOrBoth(l results.Layer) results.Layer {
+	if l == "" {
+		return results.LayerBoth
+	}
+	return l
 }
 
 func missingReason(missing []checks.Capability) string {

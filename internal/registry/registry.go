@@ -14,6 +14,7 @@ import (
 
 	"github.com/modern-apps-5/vks-inspector/internal/checks"
 	"github.com/modern-apps-5/vks-inspector/internal/config"
+	"github.com/modern-apps-5/vks-inspector/internal/results"
 )
 
 // Registry is a collection of checks keyed by ID.
@@ -70,6 +71,9 @@ func (r *Registry) Len() int { return len(r.byID) }
 type Selector struct {
 	Mode     checks.Mode
 	Topology config.Topology
+	// Layer restricts to Supervisor-enablement or VKS-cluster prerequisites.
+	// Empty or LayerBoth runs everything.
+	Layer results.Layer
 	// Only, when non-empty, restricts to these check IDs or categories.
 	Only []string
 	// Skip removes these check IDs or categories.
@@ -96,11 +100,19 @@ func (r *Registry) Select(s Selector) []Decision {
 		m := c.Meta()
 		d := Decision{Check: c, Selected: true}
 
+		want := s.Layer
+		if want == "" {
+			want = results.LayerBoth
+		}
+
 		switch {
 		case !m.SupportsMode(s.Mode):
 			d.Selected, d.Reason = false, fmt.Sprintf("check does not support %s mode", s.Mode)
 		case !m.AppliesTo(s.Topology):
-			d.Selected, d.Reason = false, fmt.Sprintf("not applicable to topology %s", s.Topology)
+			d.Selected, d.Reason = false, fmt.Sprintf("applies to %s, this environment is %s",
+				m.Applies.Describe(), s.Topology)
+		case !m.EffectiveLayer().Includes(want):
+			d.Selected, d.Reason = false, fmt.Sprintf("%s-layer check, run asked for %s", m.EffectiveLayer(), want)
 		case len(only) > 0 && !matches(m, only):
 			d.Selected, d.Reason = false, "excluded by --only"
 		case len(skip) > 0 && matches(m, skip):

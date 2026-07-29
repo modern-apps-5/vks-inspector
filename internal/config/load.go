@@ -46,11 +46,18 @@ func Parse(r io.Reader) (*Config, error) {
 		return nil, fmt.Errorf("parse config: %w", err)
 	}
 
-	if err := cfg.validateStructure(); err != nil {
+	if err := Validate(&cfg); err != nil {
 		return nil, err
 	}
 	return &cfg, nil
 }
+
+// Validate applies the structural rules to a config from any source.
+//
+// Exported because a config assembled interactively must go through exactly the
+// same gate as one read from a file. An interactively-built config that a
+// file-based run would have rejected is a bug, not a convenience.
+func Validate(c *Config) error { return c.validateStructure() }
 
 func (c *Config) validateStructure() error {
 	var errs []error
@@ -65,8 +72,8 @@ func (c *Config) validateStructure() error {
 	if c.Metadata.Name == "" {
 		errs = append(errs, errors.New("metadata.name is required; it names the environment in reports and baselines"))
 	}
-	if !c.Topology.Valid() {
-		errs = append(errs, fmt.Errorf("topology %q is not one of %v", c.Topology, AllTopologies))
+	if err := c.Topology.Validate(); err != nil {
+		errs = append(errs, fmt.Errorf("topology: %w", err))
 	}
 
 	// Per-topology structural requirements. These are about whether the
@@ -80,8 +87,8 @@ func (c *Config) validateStructure() error {
 	case c.Topology.UsesHAProxy() && c.HAProxy == nil:
 		errs = append(errs, fmt.Errorf("topology %q requires a `haproxy:` block", c.Topology))
 	}
-	if c.Topology == TopologyNSXVPC && (c.NSX == nil || c.NSX.VPC == nil) {
-		errs = append(errs, errors.New("topology nsx-vpc requires an `nsx.vpc:` block"))
+	if c.Topology.Networking == NetNSXVPC && (c.NSX == nil || c.NSX.VPC == nil) {
+		errs = append(errs, errors.New("networking nsx-vpc requires an `nsx.vpc:` block"))
 	}
 	if c.Infrastructure.VCenter.FQDN == "" {
 		errs = append(errs, errors.New("infrastructure.vcenter.fqdn is required"))

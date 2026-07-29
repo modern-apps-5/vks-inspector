@@ -19,7 +19,7 @@ func testConfig() *config.Config {
 		APIVersion: config.APIVersion,
 		Kind:       config.Kind,
 		Metadata:   config.Metadata{Name: "engine-test"},
-		Topology:   config.TopologyNSX,
+		Topology:   config.Topology{Networking: config.NetNSX, LoadBalancer: config.LBNSX},
 		NSX:        &config.NSX{Tier0Gateway: "T0"},
 	}
 }

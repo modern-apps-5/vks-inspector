@@ -10,6 +10,11 @@ import (
 	"github.com/modern-apps-5/vks-inspector/internal/results"
 )
 
+var (
+	topoNSX    = config.Topology{Networking: config.NetNSX, LoadBalancer: config.LBNSX}
+	topoVDSALB = config.Topology{Networking: config.NetVDS, LoadBalancer: config.LBALB}
+)
+
 type stub struct{ meta checks.Meta }
 
 func (s stub) Meta() checks.Meta { return s.meta }
@@ -40,8 +45,12 @@ func TestSelect(t *testing.T) {
 		stub{meta("dns.forward", func(m *checks.Meta) { m.Category = results.CategoryDNS })},
 		stub{meta("dns.reverse", func(m *checks.Meta) { m.Category = results.CategoryDNS })},
 		stub{meta("nsx.tier0", func(m *checks.Meta) {
-			m.Topologies = []config.Topology{config.TopologyNSX, config.TopologyNSXALB}
+			m.Applies = checks.Applicability{Networking: []config.Networking{config.NetNSX, config.NetNSXVPC}}
 		})},
+		stub{meta("alb.licence", func(m *checks.Meta) {
+			m.Applies = checks.Applicability{LoadBalancers: []config.LoadBalancer{config.LBALB}}
+		})},
+		stub{meta("vks.tkr", func(m *checks.Meta) { m.Layer = results.LayerVKS })},
 		stub{meta("verify.only", func(m *checks.Meta) { m.Modes = []checks.Mode{checks.ModeVerify} })},
 	)
 
@@ -51,39 +60,57 @@ func TestSelect(t *testing.T) {
 		want     []string
 	}{
 		{
-			name:     "preflight on nsx selects everything that supports it",
-			selector: registry.Selector{Mode: checks.ModePreflight, Topology: config.TopologyNSX},
+			name:     "nsx+nsx-lb selects the networking-gated check, not the LB-gated one",
+			selector: registry.Selector{Mode: checks.ModePreflight, Topology: topoNSX},
+			want:     []string{"dns.forward", "dns.reverse", "nsx.tier0", "vks.tkr"},
+		},
+		{
+			// The axes filter independently: vds excludes the NSX check, alb
+			// includes the ALB check. A flat topology enum could not express
+			// this without every check re-listing valid combinations.
+			name:     "vds+alb selects the LB-gated check, not the networking-gated one",
+			selector: registry.Selector{Mode: checks.ModePreflight, Topology: topoVDSALB},
+			want:     []string{"alb.licence", "dns.forward", "dns.reverse", "vks.tkr"},
+		},
+		{
+			name:     "layer filter restricts to supervisor prerequisites",
+			selector: registry.Selector{Mode: checks.ModePreflight, Topology: topoNSX, Layer: results.LayerSupervisor},
 			want:     []string{"dns.forward", "dns.reverse", "nsx.tier0"},
 		},
 		{
-			name:     "topology filters out inapplicable checks",
-			selector: registry.Selector{Mode: checks.ModePreflight, Topology: config.TopologyVDSALB},
-			want:     []string{"dns.forward", "dns.reverse"},
+			name:     "layer filter restricts to vks prerequisites",
+			selector: registry.Selector{Mode: checks.ModePreflight, Topology: topoNSX, Layer: results.LayerVKS},
+			want:     []string{"vks.tkr"},
+		},
+		{
+			name:     "an empty layer means both",
+			selector: registry.Selector{Mode: checks.ModePreflight, Topology: topoNSX, Layer: ""},
+			want:     []string{"dns.forward", "dns.reverse", "nsx.tier0", "vks.tkr"},
 		},
 		{
 			name:     "verify mode selects the verify-only check",
-			selector: registry.Selector{Mode: checks.ModeVerify, Topology: config.TopologyNSX},
-			want:     []string{"dns.forward", "dns.reverse", "nsx.tier0", "verify.only"},
+			selector: registry.Selector{Mode: checks.ModeVerify, Topology: topoNSX},
+			want:     []string{"dns.forward", "dns.reverse", "nsx.tier0", "verify.only", "vks.tkr"},
 		},
 		{
 			name:     "only by exact check id",
-			selector: registry.Selector{Mode: checks.ModePreflight, Topology: config.TopologyNSX, Only: []string{"dns.forward"}},
+			selector: registry.Selector{Mode: checks.ModePreflight, Topology: topoNSX, Only: []string{"dns.forward"}},
 			want:     []string{"dns.forward"},
 		},
 		{
 			name:     "only by namespace prefix",
-			selector: registry.Selector{Mode: checks.ModePreflight, Topology: config.TopologyNSX, Only: []string{"dns"}},
+			selector: registry.Selector{Mode: checks.ModePreflight, Topology: topoNSX, Only: []string{"dns"}},
 			want:     []string{"dns.forward", "dns.reverse"},
 		},
 		{
 			name:     "only by category",
-			selector: registry.Selector{Mode: checks.ModePreflight, Topology: config.TopologyNSX, Only: []string{"dns"}},
+			selector: registry.Selector{Mode: checks.ModePreflight, Topology: topoNSX, Only: []string{"dns"}},
 			want:     []string{"dns.forward", "dns.reverse"},
 		},
 		{
 			name:     "skip by namespace",
-			selector: registry.Selector{Mode: checks.ModePreflight, Topology: config.TopologyNSX, Skip: []string{"dns"}},
-			want:     []string{"nsx.tier0"},
+			selector: registry.Selector{Mode: checks.ModePreflight, Topology: topoNSX, Skip: []string{"dns"}},
+			want:     []string{"nsx.tier0", "vks.tkr"},
 		},
 	}
 
@@ -112,10 +139,12 @@ func TestSelectAccountsForEveryCheck(t *testing.T) {
 	reg := registry.New()
 	reg.Register(
 		stub{meta("a")},
-		stub{meta("b", func(m *checks.Meta) { m.Topologies = []config.Topology{config.TopologyNSXVPC} })},
+		stub{meta("b", func(m *checks.Meta) {
+			m.Applies = checks.Applicability{Networking: []config.Networking{config.NetNSXVPC}}
+		})},
 	)
 
-	decisions := reg.Select(registry.Selector{Mode: checks.ModePreflight, Topology: config.TopologyNSX})
+	decisions := reg.Select(registry.Selector{Mode: checks.ModePreflight, Topology: topoNSX})
 	if len(decisions) != reg.Len() {
 		t.Fatalf("got %d decisions for %d checks", len(decisions), reg.Len())
 	}

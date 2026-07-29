@@ -19,6 +19,7 @@ package checks
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/modern-apps-5/vks-inspector/internal/config"
@@ -81,11 +82,19 @@ type Meta struct {
 	// someone's deployment.
 	RequirementIDs []string
 	Category       results.Category
+	// Layer says whether this is a Supervisor enablement prerequisite or a VKS
+	// workload-cluster one. Most checks in this tool are Supervisor-layer:
+	// there is no VKS without a Supervisor, so the majority of "is this ready
+	// for VKS" questions are really "can the Supervisor be enabled" questions.
+	// Defaults to LayerSupervisor if left empty, because that is the honest
+	// default and silently defaulting to "both" would overstate coverage.
+	Layer results.Layer
 	// Severity is the default grading. config.Policy.SeverityOverrides can
 	// change it at runtime; the check itself never decides how much it matters.
 	Severity results.Severity
-	// Topologies this check applies to. Empty means all.
-	Topologies []config.Topology
+	// Applies restricts the check by topology axis. The zero value applies
+	// everywhere.
+	Applies Applicability
 	// Modes this check can run in. A check supporting only one mode is a smell
 	// and should be justified in a comment.
 	Modes []Mode
@@ -99,17 +108,82 @@ type Meta struct {
 	Invasive bool
 }
 
-// AppliesTo reports whether this check is relevant to a topology.
-func (m Meta) AppliesTo(t config.Topology) bool {
-	if len(m.Topologies) == 0 {
-		return true
+// Applicability restricts a check to particular topology axes.
+//
+// Requirements attach to the axis they actually depend on. The NSX overlay MTU
+// requirement depends on the networking choice and is indifferent to the load
+// balancer; the ALB licence-tier requirement depends on the load balancer and
+// is indifferent to the networking. Expressing that directly means a new
+// supported combination does not require touching every check.
+//
+// An empty slice means "any value on this axis". The zero Applicability applies
+// everywhere, which is the right default for things like DNS and NTP.
+type Applicability struct {
+	Networking    []config.Networking
+	LoadBalancers []config.LoadBalancer
+}
+
+// Matches reports whether the check applies to a topology.
+func (a Applicability) Matches(t config.Topology) bool {
+	if len(a.Networking) > 0 && !containsNetworking(a.Networking, t.Networking) {
+		return false
 	}
-	for _, k := range m.Topologies {
-		if k == t {
+	if len(a.LoadBalancers) > 0 && !containsLB(a.LoadBalancers, t.LoadBalancer) {
+		return false
+	}
+	return true
+}
+
+// Describe renders the applicability for `explain` and for skip reasons.
+func (a Applicability) Describe() string {
+	if len(a.Networking) == 0 && len(a.LoadBalancers) == 0 {
+		return "all topologies"
+	}
+	parts := make([]string, 0, 2)
+	if len(a.Networking) > 0 {
+		vals := make([]string, 0, len(a.Networking))
+		for _, n := range a.Networking {
+			vals = append(vals, string(n))
+		}
+		parts = append(parts, "networking="+strings.Join(vals, ","))
+	}
+	if len(a.LoadBalancers) > 0 {
+		vals := make([]string, 0, len(a.LoadBalancers))
+		for _, lb := range a.LoadBalancers {
+			vals = append(vals, string(lb))
+		}
+		parts = append(parts, "loadBalancer="+strings.Join(vals, ","))
+	}
+	return strings.Join(parts, " and ")
+}
+
+func containsNetworking(set []config.Networking, v config.Networking) bool {
+	for _, s := range set {
+		if s == v {
 			return true
 		}
 	}
 	return false
+}
+
+func containsLB(set []config.LoadBalancer, v config.LoadBalancer) bool {
+	for _, s := range set {
+		if s == v {
+			return true
+		}
+	}
+	return false
+}
+
+// AppliesTo reports whether this check is relevant to a topology.
+func (m Meta) AppliesTo(t config.Topology) bool { return m.Applies.Matches(t) }
+
+// EffectiveLayer returns the check's layer, defaulting to Supervisor.
+func (m Meta) EffectiveLayer() results.Layer {
+	if m.Layer == "" {
+		return results.LayerSupervisor
+	}
+	return m.Layer
 }
 
 // SupportsMode reports whether this check can run in the given mode.
@@ -234,6 +308,7 @@ func NewResult(m Meta, rc *RunContext, target string) results.Result {
 		RequirementIDs: m.RequirementIDs,
 		Title:          m.Title,
 		Category:       m.Category,
+		Layer:          m.EffectiveLayer(),
 		Severity:       m.Severity,
 		Status:         results.StatusUnknown,
 		Mode:           string(modeOf(rc)),

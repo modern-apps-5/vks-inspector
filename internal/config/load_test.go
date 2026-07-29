@@ -17,8 +17,8 @@ func TestExampleConfigLoads(t *testing.T) {
 	if err != nil {
 		t.Fatalf("config/example.yaml does not load: %v", err)
 	}
-	if cfg.Topology != config.TopologyNSX {
-		t.Errorf("topology = %q", cfg.Topology)
+	if cfg.Topology.Networking != config.NetNSX || cfg.Topology.LoadBalancer != config.LBNSX {
+		t.Errorf("topology = %s", cfg.Topology)
 	}
 	if cfg.Digest() == "" {
 		t.Error("empty config digest")
@@ -64,12 +64,21 @@ func TestStructuralValidation(t *testing.T) {
 			wantErr: "apiVersion",
 		},
 		{
-			name:    "unknown topology is rejected",
-			yaml:    strings.Replace(minimalConfig, "topology: nsx", "topology: openshift", 1),
-			wantErr: "topology",
+			name:    "unknown networking value is rejected",
+			yaml:    strings.Replace(minimalConfig, "networking: nsx", "networking: openshift", 1),
+			wantErr: "networking \"openshift\" is not one of",
 		},
 		{
-			name:    "nsx topology without an nsx block is incoherent",
+			// The axes are independent but not freely combinable. An
+			// unsupported pairing must be refused, not assumed workable:
+			// telling someone their unsupported design passed preflight is
+			// the worst thing this tool could do.
+			name:    "valid axes in an unsupported combination are rejected",
+			yaml:    strings.Replace(minimalConfig, "networking: nsx", "networking: vds", 1),
+			wantErr: "not a supported combination",
+		},
+		{
+			name:    "nsx networking without an nsx block is incoherent",
 			yaml:    strings.Replace(minimalConfig, "nsx:\n  tier0Gateway: T0\n", "", 1),
 			wantErr: "requires an `nsx:` block",
 		},
@@ -124,7 +133,9 @@ const minimalConfig = `apiVersion: ` + config.APIVersion + `
 kind: EnvironmentSpec
 metadata:
   name: digest-test
-topology: nsx
+topology:
+  networking: nsx
+  loadBalancer: nsx-lb
 infrastructure:
   vcenter:
     fqdn: vcenter.example.com

@@ -80,7 +80,51 @@ const (
 	CategoryInventory Category = "inventory"
 	// CategoryMeta covers the tool's own self-checks.
 	CategoryMeta Category = "meta"
+	// CategoryStorage covers storage policy and content library prerequisites.
+	// Not networking, but they gate Supervisor enablement and an operator
+	// running a readiness check wants to know about them.
+	CategoryStorage Category = "storage"
 )
+
+// Layer distinguishes the two things an operator is actually asking about.
+//
+// You cannot have VKS clusters without a Supervisor, so most "VKS readiness"
+// questions are really Supervisor enablement prerequisites — and they are asked
+// at a different time, by a different person, than the questions about whether
+// workload clusters can then be provisioned. Conflating them produces a report
+// that answers neither question cleanly.
+type Layer string
+
+const (
+	// LayerSupervisor — prerequisites for enabling the Supervisor (vSphere IaaS
+	// control plane). These must hold before anything else is possible.
+	LayerSupervisor Layer = "supervisor"
+	// LayerVKS — prerequisites for provisioning VKS/TKG workload clusters on an
+	// enabled Supervisor.
+	LayerVKS Layer = "vks"
+	// LayerBoth — applies at both layers.
+	LayerBoth Layer = "both"
+)
+
+// AllLayers is the canonical ordered list.
+var AllLayers = []Layer{LayerSupervisor, LayerVKS, LayerBoth}
+
+// Includes reports whether a check tagged with l should run when the operator
+// asked for want. LayerBoth matches everything; asking for LayerBoth runs
+// everything.
+func (l Layer) Includes(want Layer) bool {
+	return want == LayerBoth || l == LayerBoth || l == want
+}
+
+// Valid reports whether l is a known layer.
+func (l Layer) Valid() bool {
+	for _, k := range AllLayers {
+		if k == l {
+			return true
+		}
+	}
+	return false
+}
 
 // Value is one side of an assertion. Summary is for humans; Data is for
 // machines — drift diffs Data, never Summary.
@@ -111,6 +155,9 @@ type Result struct {
 
 	Title    string   `json:"title"`
 	Category Category `json:"category"`
+	// Layer records whether this is a Supervisor enablement prerequisite or a
+	// VKS workload-cluster one. Most are Supervisor.
+	Layer    Layer    `json:"layer"`
 	Severity Severity `json:"severity"`
 	Status   Status   `json:"status"`
 
@@ -160,6 +207,9 @@ type ToolInfo struct {
 type RunInfo struct {
 	Mode     string `json:"mode"`
 	Topology string `json:"topology"`
+	// Layer records which layer the run asked for, so a Supervisor-only run is
+	// never mistaken for full coverage.
+	Layer string `json:"layer,omitempty"`
 	// ConfigDigest is a SHA-256 over the normalised config, so drift can tell
 	// "the environment changed" from "the declared intent changed".
 	ConfigDigest string `json:"config_digest,omitempty"`
