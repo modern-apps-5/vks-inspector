@@ -1,5 +1,5 @@
 # vks-inspector
-Pre Flight Checks for Supervisor / VKS Deployment. VKS Inspector aims to quickly indentify common network misconfigurations and errors in any VKS environment.  The team is constantly incorporating field feedback to enhance the test coverage. Please open a Gitlab Issue with a FR to add a test that is missing.
+Pre Flight Checks for Supervisor / VKS Deployment. VKS Inspector aims to quickly indentify common network misconfigurations and errors in any vSphere environment where you are planning on deploying Supervisor & VKS.  The team is constantly incorporating field feedback to enhance the test coverage. Please open a Gitlab Issue with a FR to add a test that is missing.
 
 ## Architecture Options: 
 1. VDS + FLB
