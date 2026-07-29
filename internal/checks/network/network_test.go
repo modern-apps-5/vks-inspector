@@ -613,3 +613,124 @@ func selfSigned(t *testing.T, dnsName string, notAfter time.Time) *x509.Certific
 	}
 	return cert
 }
+
+// The bug this guards: --insecure-skip-tls-verify was applied only to the
+// credential handed to the client, so the certificate checks never learned
+// verification was disabled and went on asserting a chain nobody verified.
+func TestInsecureFlagReachesTheChecks(t *testing.T) {
+	t.Parallel()
+
+	leaf := selfSigned(t, "vc01.gpu.set.lab", now.Add(365*24*time.Hour))
+	f := &probes.Fake{TLS: map[string]probes.TLSAnswer{
+		"10.47.0.200:443": {Chain: []*x509.Certificate{leaf}, Verified: false,
+			VerifyErr: errors.New("certificate is not trusted")},
+	}}
+	ctx := rc(f, func(cfg *config.Config) {
+		cfg.Infrastructure.VCenter = config.Endpoint{FQDN: "10.47.0.200", Port: 443}
+	})
+	ctx.InsecureTLS = true // set by the flag, with no credential stored at all
+
+	res, err := network.TLSChain{}.Run(context.Background(), ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res[0].Status != results.StatusSkip {
+		t.Errorf("status = %s, want skip when verification was disabled", res[0].Status)
+	}
+}
+
+// An IP typed into the fqdn field has identical consequences to one in the ip
+// field, and operators routinely do it. Detection must key on the host actually
+// used, not on which field it came from.
+func TestIPInTheFQDNFieldIsStillAnIPEndpoint(t *testing.T) {
+	t.Parallel()
+
+	leaf := selfSigned(t, "vc01.gpu.set.lab", now.Add(365*24*time.Hour))
+	f := &probes.Fake{TLS: map[string]probes.TLSAnswer{
+		"10.47.0.200:443": {Chain: []*x509.Certificate{leaf}, Verified: false,
+			VerifyErr: errors.New("certificate is not trusted")},
+	}}
+	ctx := rc(f, func(cfg *config.Config) {
+		// Exactly what a real operator did: the address in the fqdn field.
+		cfg.Infrastructure.VCenter = config.Endpoint{FQDN: "10.47.0.200", Port: 443}
+	})
+
+	res, err := network.TLSChain{}.Run(context.Background(), ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(res[0].Observed.Summary, "by IP") {
+		t.Errorf("IP-in-fqdn not detected: %s", res[0].Observed.Summary)
+	}
+	if !strings.Contains(res[0].Remediation, "vc01.gpu.set.lab") {
+		t.Errorf("remediation does not name the certificate's hostname: %s", res[0].Remediation)
+	}
+}
+
+// A certificate carrying only a CN and no SANs is the case the IP diagnosis
+// exists for, so it must not be the case it misses.
+func TestDiagnosisWorksWithCommonNameOnly(t *testing.T) {
+	t.Parallel()
+
+	leaf := commonNameOnly(t, "vc01.gpu.set.lab")
+	f := &probes.Fake{TLS: map[string]probes.TLSAnswer{
+		"10.47.0.200:443": {Chain: []*x509.Certificate{leaf}, Verified: false,
+			VerifyErr: errors.New("certificate is not trusted")},
+	}}
+	ctx := rc(f, func(cfg *config.Config) {
+		cfg.Infrastructure.VCenter = config.Endpoint{FQDN: "10.47.0.200", Port: 443}
+	})
+
+	res, err := network.TLSChain{}.Run(context.Background(), ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(res[0].Remediation, "vc01.gpu.set.lab") {
+		t.Errorf("CN fallback did not fire: %s", res[0].Remediation)
+	}
+}
+
+// "Resolving" an IP literal always succeeds and proves nothing. Counting it
+// manufactures a pass out of thin air, which is what "1 name resolved
+// correctly" meant on a config whose only endpoint was an address.
+func TestIPLiteralIsNotADNSTarget(t *testing.T) {
+	t.Parallel()
+
+	f := &probes.Fake{}
+	ctx := rc(f, func(cfg *config.Config) {
+		cfg.Infrastructure.VCenter = config.Endpoint{FQDN: "10.47.0.200", Port: 443}
+		cfg.Services.DNS.AdditionalNames = nil
+	})
+
+	res, err := network.Forward{}.Run(context.Background(), ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res[0].Status != results.StatusSkip {
+		t.Errorf("status = %s, want skip — an IP literal is not a name to resolve (%s)",
+			res[0].Status, res[0].Observed.Summary)
+	}
+}
+
+func commonNameOnly(t *testing.T, cn string) *x509.Certificate {
+	t.Helper()
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(2),
+		Subject:      pkix.Name{CommonName: cn},
+		NotBefore:    now.Add(-time.Hour),
+		NotAfter:     now.Add(365 * 24 * time.Hour),
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cert, err := x509.ParseCertificate(der)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cert
+}

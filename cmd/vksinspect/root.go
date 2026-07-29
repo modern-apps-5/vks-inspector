@@ -31,6 +31,7 @@ type globalOpts struct {
 	saveConfig     string
 	forceOverwrite bool
 	insecureTLS    bool
+	relogin        bool
 	format         string
 	output         string
 	verbose        bool
@@ -56,6 +57,8 @@ func (g *globalOpts) bind(cmd *cobra.Command) {
 			"the answers describe no real environment, yet checks will still run and may report PASS")
 	f.StringVar(&g.saveConfig, "save-config", "", "write the assembled config to this path for non-interactive re-runs")
 	f.BoolVar(&g.forceOverwrite, "force", false, "allow --save-config to overwrite an existing file")
+	f.BoolVar(&g.relogin, "relogin", false,
+		"ignore any stored credentials and ask again — use this when a saved password is wrong")
 	f.BoolVar(&g.insecureTLS, "insecure-skip-tls-verify", false,
 		"do not verify management-plane TLS certificates. Needed for the self-signed certs common in "+
 			"labs. Every certificate check for those endpoints is then downgraded to informational, "+

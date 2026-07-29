@@ -34,8 +34,11 @@ type Options struct {
 	Clients  checks.Clients
 	Probes   checks.Probes
 	Invasive bool
-	Only     []string
-	Skip     []string
+	// InsecureTLS disables certificate verification and makes certificate
+	// checks downgrade themselves.
+	InsecureTLS bool
+	Only        []string
+	Skip        []string
 	// Now is injected for deterministic tests.
 	Now func() time.Time
 	// Vantage overrides the recorded probe origin. Defaults to os.Hostname.
@@ -74,14 +77,15 @@ func Run(ctx context.Context, reg *registry.Registry, opts Options) (*results.Re
 	skip := append(append([]string(nil), opts.Skip...), opts.Config.Policy.Skip...)
 
 	rc := &checks.RunContext{
-		Mode:     opts.Mode,
-		Config:   opts.Config,
-		Creds:    opts.Creds,
-		Clients:  opts.Clients,
-		Probes:   opts.Probes,
-		Now:      now,
-		Invasive: opts.Invasive || opts.Config.Policy.AllowInvasive,
-		Vantage:  vantage,
+		Mode:        opts.Mode,
+		Config:      opts.Config,
+		Creds:       opts.Creds,
+		Clients:     opts.Clients,
+		Probes:      opts.Probes,
+		Now:         now,
+		Invasive:    opts.Invasive || opts.Config.Policy.AllowInvasive,
+		InsecureTLS: opts.InsecureTLS,
+		Vantage:     vantage,
 	}
 
 	started := now()
@@ -104,6 +108,12 @@ func Run(ctx context.Context, reg *registry.Registry, opts Options) (*results.Re
 			continue
 		}
 		if missing := rc.Missing(m.Needs); len(missing) > 0 {
+			for _, cap := range missing {
+				if cov.MissingCapabilities == nil {
+					cov.MissingCapabilities = map[string]int{}
+				}
+				cov.MissingCapabilities[string(cap)]++
+			}
 			out = append(out, skipResult(m, rc, missingReason(missing)))
 			continue
 		}

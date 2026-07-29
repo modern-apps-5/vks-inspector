@@ -3,6 +3,7 @@ package prompt
 import (
 	"fmt"
 	"net/netip"
+	"os"
 	"strconv"
 	"strings"
 
@@ -66,6 +67,18 @@ func Elicit(p *Prompter, cfg *config.Config, discovered *Discovered) error {
 	}
 	if err := elicitScale(p, cfg); err != nil {
 		return err
+	}
+
+	// Say what was left blank. Those values are not lost silently — the checks
+	// that need them skip with a reason — but the operator should know which
+	// questions a non-interactive run could not ask.
+	if !p.Interactive && len(p.Unanswered) > 0 {
+		fmt.Fprintf(os.Stderr, "\n  note: %d question(s) unanswered in this non-interactive run;\n"+
+			"        checks needing them will report as skipped:\n", len(p.Unanswered))
+		for _, q := range p.Unanswered {
+			fmt.Fprintf(os.Stderr, "          · %s\n", q)
+		}
+		fmt.Fprintln(os.Stderr)
 	}
 
 	// Record placeholder use in the config itself, so a saved file and every
@@ -187,15 +200,19 @@ func elicitNetworks(p *Prompter, cfg *config.Config) error {
 		if err != nil {
 			return err
 		}
-		cfg.Networks.Management.Name = "management"
-		cfg.Networks.Management.CIDR = cidr
-		cfg.Networks.Management.Routable = true
+		if cidr != "" {
+			cfg.Networks.Management.Name = "management"
+			cfg.Networks.Management.CIDR = cidr
+			cfg.Networks.Management.Routable = true
+		}
 
 		gw, err := p.Ask("Management network gateway", "10.10.0.1", "", normAddr)
 		if err != nil {
 			return err
 		}
-		cfg.Networks.Management.Gateway = gw
+		if gw != "" {
+			cfg.Networks.Management.Gateway = gw
+		}
 	}
 
 	if len(cfg.Networks.Management.Ranges) == 0 {
@@ -212,8 +229,10 @@ func elicitNetworks(p *Prompter, cfg *config.Config) error {
 		if err != nil {
 			return err
 		}
-		cfg.Networks.Management.Ranges = []config.IPRange{
-			{Start: start, End: end, Purpose: "supervisor-control-plane"},
+		if start != "" && end != "" {
+			cfg.Networks.Management.Ranges = []config.IPRange{
+				{Start: start, End: end, Purpose: "supervisor-control-plane"},
+			}
 		}
 	}
 
@@ -221,6 +240,9 @@ func elicitNetworks(p *Prompter, cfg *config.Config) error {
 		cidr, err := p.Ask("Workload network CIDR (Supervisor and VKS cluster nodes)", "10.20.0.0/16", "", normStrictCIDR)
 		if err != nil {
 			return err
+		}
+		if cidr == "" {
+			return nil
 		}
 		w := config.NetworkSpec{Name: "workload-primary", CIDR: cidr, Routable: true}
 		if gw, err := p.AskOptional("Workload network gateway", "10.20.0.1", normAddr); err == nil && gw != "" {

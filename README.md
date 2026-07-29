@@ -68,6 +68,10 @@ complete file asks nothing:
 `--save-config` asks before overwriting an existing file; `--force` overwrites
 without asking, and is required in a non-interactive run.
 
+`--non-interactive` no longer refuses to run a config that is missing an
+optional field. Anything unanswered is listed, and the checks that need it
+report as skipped — the same way the tool handles every other absence.
+
 Add `--non-interactive` in CI so a missing value is an error naming the field
 rather than a prompt that hangs a pipeline.
 
@@ -92,6 +96,10 @@ export VKSINSPECT_VCENTER_PASSWORD='...'
 Saved credentials go to `~/.vksinspect/credentials.yaml` at mode `0600` (the
 tool refuses to read anything looser). They are **never** written to the
 environment config, a report, or a baseline. Saving is opt-in.
+
+**A wrong stored password is not a dead end.** If the server rejects the
+credentials the tool offers to re-enter them and retries. `--relogin` forces the
+prompt without waiting for a failure.
 
 **Self-signed certificates.** Lab vCenters usually have them, and verification
 failure otherwise blocks every credentialed check. The tool asks, or use the flag:

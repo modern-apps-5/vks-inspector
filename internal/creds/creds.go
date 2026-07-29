@@ -204,6 +204,19 @@ func (s *Set) Put(ref string, c Credential) {
 	s.byRef[strings.ToLower(ref)] = c
 }
 
+// SetInsecureAll marks every credential as skipping TLS verification.
+//
+// Used by --insecure-skip-tls-verify. It must reach the set the checks see, not
+// only the copy handed to a client — otherwise the certificate checks never
+// learn that verification was disabled and go on asserting a chain nobody
+// verified.
+func (s *Set) SetInsecureAll() {
+	for k, c := range s.byRef {
+		c.InsecureSkipVerify = true
+		s.byRef[k] = c
+	}
+}
+
 // DefaultPath is where credentials are stored when the operator does not choose.
 //
 // Under the user's home directory rather than beside the config, so a

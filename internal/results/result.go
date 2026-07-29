@@ -247,6 +247,11 @@ type Coverage struct {
 	// touched the target environment — a packet sent or an API call made.
 	// False means the run graded declared intent and nothing else.
 	EnvironmentContacted bool `json:"environment_contacted"`
+	// MissingCapabilities names the access this run did not have, with how many
+	// checks each cost. Without it a reader sees "7 passed" and has to work out
+	// for themselves that five checks never ran because vCenter was
+	// unreachable — which is the question operators ask first.
+	MissingCapabilities map[string]int `json:"missing_capabilities,omitempty"`
 }
 
 // Summary is the roll-up. Renderers display it; the exit code is derived from

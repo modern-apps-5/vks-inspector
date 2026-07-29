@@ -63,11 +63,21 @@ func managementEndpoints(cfg *config.Config) []endpoint {
 		if ep.FQDN == "" && ep.IP == "" {
 			return
 		}
-		out = append(out, endpoint{
+		e := endpoint{
 			Source: source, Name: ep.FQDN, IP: ep.IP, Port: ep.Port, Required: required,
 			CredentialRef: ep.CredentialRef,
-			DeclaredByIP:  ep.FQDN == "" && ep.IP != "",
-		})
+		}
+		// What matters is whether the host actually used is an address, not
+		// which field it was typed into. Operators routinely put an IP in the
+		// fqdn field, and the consequences are identical: nothing to resolve,
+		// and a certificate validated against an address.
+		if _, err := netip.ParseAddr(e.Host()); err == nil {
+			e.DeclaredByIP = true
+			if e.IP == "" {
+				e.IP = e.Host()
+			}
+		}
+		out = append(out, e)
 	}
 
 	add("infrastructure.vcenter", cfg.Infrastructure.VCenter, true)
@@ -99,6 +109,9 @@ func managementEndpoints(cfg *config.Config) []endpoint {
 // unverifiedTLS reports whether certificate verification was disabled for this
 // endpoint, which makes any assertion about its chain meaningless.
 func (e endpoint) unverifiedTLS(rc *checks.RunContext) bool {
+	if rc.InsecureTLS {
+		return true
+	}
 	ref := e.CredentialRef
 	if ref == "" {
 		ref = "vcenter"
@@ -122,6 +135,11 @@ func resolvableNames(cfg *config.Config) []namedTarget {
 
 	add := func(source, name, expect string) {
 		if name == "" || seen[name] {
+			return
+		}
+		// An IP literal is not a name. "Resolving" one is a no-op that always
+		// succeeds, and counting it manufactures a pass out of nothing.
+		if _, err := netip.ParseAddr(name); err == nil {
 			return
 		}
 		seen[name] = true
@@ -160,7 +178,7 @@ func ipOnlyEndpoints(cfg *config.Config) []string {
 	var out []string
 	for _, e := range managementEndpoints(cfg) {
 		if e.DeclaredByIP {
-			out = append(out, e.Source+" ("+e.IP+")")
+			out = append(out, e.Source+" ("+e.Host()+")")
 		}
 	}
 	return out

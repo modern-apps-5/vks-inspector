@@ -146,6 +146,32 @@ unverified), `docs/CHECK-TAXONOMY.md`, `docs/test-coverage.md`, and 14 ADRs.
 
 ### Fixed
 
+- **`--insecure-skip-tls-verify` never reached the checks.** It was applied only
+  to the credential handed to the client, so the certificate checks never
+  learned verification was disabled and went on asserting a chain nobody had
+  verified. The flag now lands on the credential set the checks see, and is also
+  carried on the run context so it applies before any credential exists.
+- **An IP typed into the `fqdn` field was not recognised as an address.**
+  Operators routinely do it, and the consequences are identical to using the
+  `ip` field: nothing to resolve, and a certificate validated against an
+  address. Detection now keys on the host actually used.
+- **`dns.forward` "resolved" IP literals and counted them as passes.** Resolving
+  an address always succeeds and proves nothing; a config whose only endpoint
+  was an IP produced "1 name resolved correctly" out of thin air. IP literals
+  are no longer DNS targets, and the check skips when no real name remains.
+- **The IP-versus-hostname diagnosis missed certificates carrying only a common
+  name** — which is the case it exists for. It now falls back to the CN.
+- **A wrong stored password was a dead end**: the tool loaded it, failed, and
+  never asked again. Authentication failures now offer a retry, and `--relogin`
+  forces a fresh prompt.
+- **`--non-interactive` refused to run a config missing any optional field.** A
+  saved config lacking only a management IP range would not run at all. Absence
+  is now reported and flows through to checks that skip with a reason.
+- **Reports did not say what access a run lacked.** The coverage line now names
+  it — "no vcenter access — 4 check(s) could not run, so nothing above covers
+  it" — because "how are these checks OK if the vCenter one is not?" is the
+  first question a reader asks.
+
 - **Thin passes read as broad ones.** `dns.forward` reported "1 name resolved
   correctly" without mentioning that the vCenter had been declared by IP and so
   was never name-checked. It now names every endpoint it could not cover. Same

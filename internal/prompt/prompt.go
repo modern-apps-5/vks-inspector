@@ -53,6 +53,26 @@ type Prompter struct {
 
 	// pending holds a declared-but-unprinted section heading.
 	pending string
+
+	// Unanswered lists questions left blank because prompting was disabled.
+	// Reported rather than fatal: an absent value flows through to a check that
+	// skips with a reason, which is how the rest of this tool handles missing
+	// input. Erroring instead made --non-interactive unusable with any config
+	// that did not fill in every optional field.
+	Unanswered []string
+}
+
+// unanswered records a question that could not be asked, and returns the zero
+// value so the caller carries on.
+func (p *Prompter) unanswered(question string) {
+	p.Unanswered = append(p.Unanswered, firstLine(question))
+}
+
+func firstLine(s string) string {
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		return strings.TrimSpace(s[:i])
+	}
+	return strings.TrimSpace(s)
 }
 
 // defaultFor returns the default to offer for a prompt, substituting the
@@ -101,6 +121,9 @@ func (p *Prompter) Select(question string, choices []Choice, def string) (string
 		if def != "" {
 			return def, nil
 		}
+		// A topology axis with no answer is structurally required, so this one
+		// stays an error — config.Validate would reject the result anyway, and
+		// failing here names the question rather than the field.
 		return "", fmt.Errorf("%w: %s", ErrNonInteractive, question)
 	}
 
@@ -159,7 +182,8 @@ func (p *Prompter) Ask(question, example, def string, validate Validator) (strin
 		if def != "" {
 			return def, nil
 		}
-		return "", fmt.Errorf("%w: %s", ErrNonInteractive, question)
+		p.unanswered(question)
+		return "", nil
 	}
 
 	for {
@@ -239,10 +263,10 @@ func (p *Prompter) askList(question, example string, def []string, validate Vali
 		if defStr != "" {
 			return splitList(defStr), nil
 		}
-		if allowEmpty {
-			return nil, nil
+		if !allowEmpty {
+			p.unanswered(question)
 		}
-		return nil, fmt.Errorf("%w: %s", ErrNonInteractive, question)
+		return nil, nil
 	}
 
 	for {

@@ -3,6 +3,7 @@ package network
 import (
 	"context"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/hex"
 	"fmt"
 	"strings"
@@ -105,16 +106,21 @@ func (c TLSChain) Run(ctx context.Context, rc *checks.RunContext) ([]results.Res
 			r.Observed.Data["verify_error"] = ans.VerifyErr.Error()
 			// The commonest cause, and one the tool can identify precisely:
 			// connecting by IP to a certificate issued for a name.
-			if ep.DeclaredByIP && len(leaf.DNSNames) > 0 {
+			// Older certificates carry only a CN and no SAN entries, so fall
+			// back to it — otherwise the case this diagnosis exists for is
+			// exactly the one it misses.
+			if names := certNames(leaf); ep.DeclaredByIP && len(names) > 0 {
 				r.Observed.Summary = fmt.Sprintf(
 					"you connected to %s by IP, but its certificate is issued for %s",
-					ep.IP, strings.Join(leaf.DNSNames, ", "))
+					ep.Host(), strings.Join(names, ", "))
+				r.Observed.Data["certificate_names"] = names
 				r.Remediation = fmt.Sprintf(
 					"Declare this endpoint by name (%s) instead of by IP, and make sure that name "+
 						"resolves. A certificate is validated against the address you connect to, so "+
-						"connecting by IP fails SAN matching even when the certificate is perfectly good. "+
-						"If the CA is also untrusted, install it or use --insecure-skip-tls-verify.",
-					leaf.DNSNames[0])
+						"connecting by IP fails name matching even when the certificate is perfectly "+
+						"good. If the issuing CA is also untrusted, install it or pass "+
+						"--insecure-skip-tls-verify.",
+					names[0])
 			}
 		default:
 			r.Status = results.StatusPass
@@ -287,6 +293,18 @@ func pinnedThumbprint(rc *checks.RunContext, ep endpoint) string {
 		}
 	}
 	return ""
+}
+
+// certNames returns the names a certificate is valid for, preferring SANs and
+// falling back to the common name.
+func certNames(leaf *x509.Certificate) []string {
+	if len(leaf.DNSNames) > 0 {
+		return leaf.DNSNames
+	}
+	if leaf.Subject.CommonName != "" {
+		return []string{leaf.Subject.CommonName}
+	}
+	return nil
 }
 
 func unverifiedCount(rc *checks.RunContext, eps []endpoint) int {

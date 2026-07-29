@@ -3,7 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
+	"net"
+	"net/netip"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
@@ -57,6 +60,13 @@ func runMode(cmd *cobra.Command, g *globalOpts, mode checks.Mode) error {
 	if err != nil {
 		return err
 	}
+	// Apply --insecure-skip-tls-verify to the set the CHECKS see, not just to
+	// the copy handed to the client. Without this the certificate checks never
+	// learn that verification was disabled and go on asserting a chain nobody
+	// verified.
+	if g.insecureTLS {
+		credSet.SetInsecureAll()
+	}
 
 	// Connect what we can. A client that fails to build yields a missing
 	// capability, which yields skipped checks with a reason — never a failed
@@ -79,11 +89,12 @@ func runMode(cmd *cobra.Command, g *globalOpts, mode checks.Mode) error {
 		// (dns.forward and dns.resolver-agreement resolve the same names;
 		// tls.chain and tls.expiry inspect the same certificates). Without
 		// this a run probes every target twice.
-		Probes:   probes.NewMemo(probes.System{Timeout: g.probeTimeout}),
-		Invasive: g.invasive,
-		Only:     g.only,
-		Skip:     g.skip,
-		Timeout:  g.timeout,
+		Probes:      probes.NewMemo(probes.System{Timeout: g.probeTimeout}),
+		Invasive:    g.invasive,
+		InsecureTLS: g.insecureTLS,
+		Only:        g.only,
+		Skip:        g.skip,
+		Timeout:     g.timeout,
 	})
 	if err != nil {
 		return err
@@ -115,42 +126,85 @@ func (g *globalOpts) buildClients(ctx context.Context, cfg *config.Config, credS
 		// path looks like. Say which file, so the operator can tell.
 		fmt.Fprintf(os.Stderr, "\n  note: %s does not exist yet\n", credSet.MissingFile)
 	}
-	cred, ok := credSet.Get(ref)
-	if !ok {
-		// Ask rather than refuse. An operator with a vCenter in front of them
-		// should not have to go and set an environment variable before the tool
-		// will look at it.
-		asked, err := g.askForCredentials(endpoint, ref, credSet)
-		if err != nil {
-			fmt.Fprintf(os.Stderr,
-				"\n  ⚠ no credentials for %s — vCenter checks will be skipped.\n"+
-					"    Set %sVCENTER_USERNAME and %sVCENTER_PASSWORD, or pass --credentials.\n\n",
-				endpoint, creds.EnvPrefix, creds.EnvPrefix)
-			return set, closers
-		}
-		cred = asked
-	}
-
-	if g.insecureTLS {
-		cred.InsecureSkipVerify = true
-	}
-
 	opts := clients.DefaultOptions()
 	opts.Timeout = g.timeout
-	c := vcenterclient.New(endpoint, cred, opts)
 
-	if err := c.Connect(ctx); err != nil {
-		// A connection failure is reported by vc.api-reachable as a finding.
-		// Saying it here too means the operator sees it before the report
-		// scrolls, which matters when it is the reason for ten skips.
-		fmt.Fprintf(os.Stderr, "\n  ⚠ could not connect to %s: %v\n"+
-			"    vCenter checks will be skipped.\n\n", endpoint, err)
-		return set, closers
+	// Try, and on an authentication failure offer to re-enter. A wrong stored
+	// password is otherwise a dead end: the tool loads it, fails, and never
+	// asks again — which is precisely the trap this loop exists to avoid.
+	for attempt := 0; attempt < 3; attempt++ {
+		cred, ok := credSet.Get(ref)
+		if ok && cred.Username == "" && cred.Token == "" {
+			ok = false // an entry with no principal is not a usable credential
+		}
+		if !ok || g.relogin {
+			asked, err := g.askForCredentials(endpoint, ref, credSet)
+			if err != nil {
+				fmt.Fprintf(os.Stderr,
+					"\n  ⚠ no credentials for %s — vCenter checks will be skipped.\n"+
+						"    Set %sVCENTER_USERNAME / %sVCENTER_PASSWORD, pass --credentials,\n"+
+						"    or re-run interactively to be prompted.\n\n",
+					endpoint, creds.EnvPrefix, creds.EnvPrefix)
+				return set, closers
+			}
+			cred = asked
+			g.relogin = false
+		}
+		if g.insecureTLS {
+			cred.InsecureSkipVerify = true
+		}
+
+		c := vcenterclient.New(endpoint, cred, opts)
+		err := c.Connect(ctx)
+		if err == nil {
+			set.VCenter = c
+			closers = append(closers, c.Close)
+			return set, closers
+		}
+
+		// Reported by vc.api-reachable too, but saying it here means the
+		// operator sees it before the report scrolls — it is the reason for
+		// five skips.
+		fmt.Fprintf(os.Stderr, "\n  ⚠ could not connect to %s:\n     %v\n", endpoint, err)
+
+		if !isAuthFailure(err) || g.nonInteractive || !isTTY(os.Stdin) {
+			fmt.Fprintf(os.Stderr, "    vCenter checks will be skipped.\n\n")
+			return set, closers
+		}
+
+		p := prompt.New(os.Stdin, os.Stderr, true)
+		again, perr := p.Confirm("The credentials were rejected. Enter them again?", true)
+		if perr != nil || !again {
+			fmt.Fprintf(os.Stderr, "    vCenter checks will be skipped.\n\n")
+			return set, closers
+		}
+		g.relogin = true
 	}
 
-	set.VCenter = c
-	closers = append(closers, c.Close)
+	fmt.Fprintf(os.Stderr, "    vCenter checks will be skipped.\n\n")
 	return set, closers
+}
+
+// isAuthFailure reports whether an error is the server rejecting credentials,
+// as opposed to the endpoint being unreachable. Re-prompting for a password
+// helps in the first case and wastes the operator's time in the second.
+func isAuthFailure(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	for _, s := range []string{
+		"incorrect user name or password",
+		"cannot complete login",
+		"invalid credentials",
+		"authenticate to vcenter",
+		"permission to perform this operation was denied",
+	} {
+		if strings.Contains(msg, s) {
+			return true
+		}
+	}
+	return false
 }
 
 // askForCredentials prompts for a username and password, and offers to save
@@ -170,8 +224,19 @@ func (g *globalOpts) askForCredentials(endpoint, ref string, set *creds.Set) (cr
 	// password can never have a default and is always typed.
 	p.UseExamples = g.useDefaults
 	p.Section("Credentials for " + endpoint)
-	p.Info("Not found in the environment or a credentials file.")
+	if _, ok := set.Get(ref); ok {
+		p.Info("Replacing the stored credentials for this endpoint.")
+	} else {
+		p.Info("Not found in the environment or a credentials file.")
+	}
 	p.Info("A read-only account is enough — this tool performs no writes.")
+	if _, err := netip.ParseAddr(hostOf(endpoint)); err == nil {
+		p.Info("")
+		p.Info("%s Note: this endpoint is an IP address, not a hostname.", "⚑")
+		p.Info("  Certificate validation compares against the address you connect to,")
+		p.Info("  so it will fail even with a perfectly good certificate. Declaring the")
+		p.Info("  FQDN instead avoids that.")
+	}
 
 	user, err := p.Ask("Username", "readonly@vsphere.local", "", nil)
 	if err != nil {
@@ -183,6 +248,9 @@ func (g *globalOpts) askForCredentials(endpoint, ref string, set *creds.Set) (cr
 	}
 
 	cred := creds.Credential{Username: user, Password: pass}
+	if existing, ok := set.Get(ref); ok && existing.InsecureSkipVerify {
+		cred.InsecureSkipVerify = true // keep a prior decision about verification
+	}
 
 	// Self-signed management-plane certificates are the norm in labs, and a
 	// tool that simply refuses to connect to them is useless there. Ask, rather
@@ -200,7 +268,7 @@ func (g *globalOpts) askForCredentials(endpoint, ref string, set *creds.Set) (cr
 	}
 	set.Put(ref, cred)
 
-	save, err := p.Confirm("Save these credentials for next time?", true)
+	save, err := p.Confirm("Save these credentials (replacing any stored copy)?", true)
 	if err != nil || !save {
 		return cred, nil
 	}
@@ -220,6 +288,14 @@ func (g *globalOpts) askForCredentials(endpoint, ref string, set *creds.Set) (cr
 	p.Info("saved to %s (mode 0600)", path)
 	p.Info("Re-runs will pick it up automatically. Never commit that file.")
 	return cred, nil
+}
+
+// hostOf strips any port from an endpoint string.
+func hostOf(endpoint string) string {
+	if h, _, err := net.SplitHostPort(endpoint); err == nil {
+		return h
+	}
+	return endpoint
 }
 
 // resolveConfig assembles the config from every source, in precedence order:

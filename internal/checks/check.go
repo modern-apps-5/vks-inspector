@@ -233,6 +233,10 @@ type RunContext struct {
 	Now func() time.Time
 	// Invasive reports whether disruptive probes are permitted.
 	Invasive bool
+	// InsecureTLS reports that certificate verification was disabled for this
+	// run. Certificate checks must downgrade themselves and say so rather than
+	// asserting a chain nobody verified.
+	InsecureTLS bool
 	// Vantage is the host identity recorded in the report.
 	Vantage string
 }

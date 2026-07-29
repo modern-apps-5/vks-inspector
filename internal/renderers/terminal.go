@@ -149,8 +149,24 @@ func (t *Terminal) renderCoverage(bw *errWriter, rep *results.Report) {
 		return
 	}
 
-	bw.printf("checks    %d ran of %d in this build — %d config-only, %d network probe(s), %d API check(s)\n\n",
+	bw.printf("checks    %d ran of %d in this build — %d config-only, %d network probe(s), %d API check(s)\n",
 		c.Executed, c.ChecksInBuild, c.ConfigOnly, c.NetworkProbes, c.APIChecks)
+
+	// Name the access this run did not have. Otherwise a reader sees the pass
+	// count and has to work out for themselves that five checks never ran.
+	if len(c.MissingCapabilities) > 0 {
+		names := make([]string, 0, len(c.MissingCapabilities))
+		for k := range c.MissingCapabilities {
+			names = append(names, k)
+		}
+		sort.Strings(names)
+		for _, k := range names {
+			bw.printf("          %s\n", t.paint(cYellow, fmt.Sprintf(
+				"no %s access — %d check(s) could not run, so nothing above covers it",
+				k, c.MissingCapabilities[k])))
+		}
+	}
+	bw.printf("\n")
 }
 
 func (t *Terminal) renderSummary(bw *errWriter, rep *results.Report) {

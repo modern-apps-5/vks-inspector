@@ -131,27 +131,60 @@ func TestListRejectionRepromptsForTheWholeList(t *testing.T) {
 	}
 }
 
-// Non-interactive must error naming the question rather than defaulting.
-// A silently-wrong default produces a confident wrong verdict, which is the
-// failure mode this whole tool exists to prevent.
-func TestNonInteractiveErrorsInsteadOfDefaulting(t *testing.T) {
+// Non-interactive must never invent an answer — but an unanswered question is
+// not the same as a wrong one.
+//
+// This originally errored on any unanswered question, which made
+// --non-interactive unusable with a config that had not filled in every
+// optional field: a saved config missing only a management IP range refused to
+// run at all. Absence now flows through as empty and is recorded, so the checks
+// that need it skip with a reason — which is how the rest of this tool handles
+// missing input. The property that matters is unchanged: no silent default.
+func TestNonInteractiveRecordsRatherThanInventing(t *testing.T) {
 	t.Parallel()
 
 	p := prompt.New(strings.NewReader(""), io.Discard, false)
 
-	if _, err := p.Ask("Management CIDR", "10.0.0.0/24", "", nil); !errors.Is(err, prompt.ErrNonInteractive) {
-		t.Errorf("Ask: got %v, want ErrNonInteractive", err)
+	got, err := p.Ask("Management CIDR", "10.0.0.0/24", "", nil)
+	if err != nil {
+		t.Errorf("Ask should not fail on an unanswered question: %v", err)
 	}
-	if _, err := p.AskList("DNS servers", "10.0.0.53", nil, nil); !errors.Is(err, prompt.ErrNonInteractive) {
-		t.Errorf("AskList: got %v, want ErrNonInteractive", err)
+	if got != "" {
+		t.Errorf("Ask returned %q; the example must never be silently adopted", got)
 	}
+
+	list, err := p.AskList("DNS servers", "10.0.0.53", nil, nil)
+	if err != nil || len(list) != 0 {
+		t.Errorf("AskList = %v, %v; want empty and no error", list, err)
+	}
+
+	if len(p.Unanswered) != 2 {
+		t.Errorf("Unanswered = %v, want both questions recorded", p.Unanswered)
+	}
+
 	// A declared default is a legitimate answer, not a guess.
 	if got, err := p.Ask("Skew", "", "30", nil); err != nil || got != "30" {
 		t.Errorf("Ask with default: got %q, %v", got, err)
 	}
-	// An optional list is legitimately empty without input.
+	// An optional list is legitimately empty and is not "unanswered".
+	before := len(p.Unanswered)
 	if got, err := p.AskListOptional("External nets", "10.0.0.0/8", nil); err != nil || len(got) != 0 {
 		t.Errorf("AskListOptional: got %v, %v", got, err)
+	}
+	if len(p.Unanswered) != before {
+		t.Error("an optional list should not be recorded as unanswered")
+	}
+}
+
+// A topology axis is structurally required — config.Validate would reject the
+// result anyway — so this one still errors, naming the question.
+func TestNonInteractiveStillErrorsOnAStructuralChoice(t *testing.T) {
+	t.Parallel()
+
+	p := prompt.New(strings.NewReader(""), io.Discard, false)
+	_, err := p.Select("Networking", []prompt.Choice{{Value: "vds"}, {Value: "nsx"}}, "")
+	if !errors.Is(err, prompt.ErrNonInteractive) {
+		t.Errorf("got %v, want ErrNonInteractive", err)
 	}
 }
 
