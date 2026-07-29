@@ -239,3 +239,98 @@ func TestSectionHeadingIsLazy(t *testing.T) {
 		t.Errorf("heading not printed before its question:\n%s", out2)
 	}
 }
+
+// --defaults turns examples into defaults so Enter walks the whole flow. It
+// exists to exercise the CLI, and every use of it must be traceable — a green
+// report on invented addresses is the most dangerous output this tool can make.
+func TestUseExamplesMakesEnterAcceptTheExample(t *testing.T) {
+	t.Parallel()
+
+	p, _ := scripted("")
+	p.UseExamples = true
+
+	got, err := p.Ask("Management CIDR", "10.10.0.0/24", "", nil)
+	if err != nil {
+		t.Fatalf("Enter should have accepted the example: %v", err)
+	}
+	if got != "10.10.0.0/24" {
+		t.Errorf("got %q, want the example", got)
+	}
+	if !p.UsedExample {
+		t.Error("UsedExample not recorded; the run would not be marked as placeholder")
+	}
+}
+
+// A real default still wins over the example — the example is a fallback, not
+// an override.
+func TestUseExamplesDoesNotOverrideARealDefault(t *testing.T) {
+	t.Parallel()
+
+	p, _ := scripted("")
+	p.UseExamples = true
+
+	got, err := p.Ask("Pod CIDR", "10.10.0.0/24", "10.244.0.0/20", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "10.244.0.0/20" {
+		t.Errorf("got %q, want the declared default", got)
+	}
+}
+
+// An optional list stays empty under --defaults. Filling it would fabricate the
+// very "existing networks" list whose absence the report is meant to disclose,
+// turning a truthful skip into a false pass.
+func TestUseExamplesLeavesOptionalListsEmpty(t *testing.T) {
+	t.Parallel()
+
+	p, _ := scripted("")
+	p.UseExamples = true
+
+	got, err := p.AskListOptional("External nets", "10.0.0.0/8", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 {
+		t.Errorf("got %v, want empty — an optional list must not be auto-filled", got)
+	}
+}
+
+func TestUseExamplesPicksTheFirstChoice(t *testing.T) {
+	t.Parallel()
+
+	p, _ := scripted("")
+	p.UseExamples = true
+
+	got, err := p.Select("Networking", []prompt.Choice{{Value: "vds"}, {Value: "nsx"}}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "vds" {
+		t.Errorf("got %q, want the first choice", got)
+	}
+	if !p.UsedExample {
+		t.Error("UsedExample not recorded")
+	}
+}
+
+// Without the flag, nothing changes: Enter on an example-bearing prompt is
+// still required.
+func TestExamplesAreNotDefaultsByDefault(t *testing.T) {
+	t.Parallel()
+
+	p, out := scripted("", "10.1.0.0/24")
+	got, err := p.Ask("Management CIDR", "10.10.0.0/24", "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "10.1.0.0/24" {
+		t.Errorf("got %q; the example must not be silently accepted", got)
+	}
+	if !strings.Contains(out.String(), "required") {
+		t.Error("Enter should still have been refused without --defaults")
+	}
+	if p.UsedExample {
+		t.Error("UsedExample set when no example was used")
+	}
+}

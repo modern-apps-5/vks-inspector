@@ -214,11 +214,15 @@ type RunInfo struct {
 	// "the environment changed" from "the declared intent changed".
 	ConfigDigest string `json:"config_digest,omitempty"`
 	// Vantage is the host the probes ran from.
-	Vantage    string    `json:"vantage,omitempty"`
-	Invasive   bool      `json:"invasive"`
-	StartedAt  time.Time `json:"started_at"`
-	FinishedAt time.Time `json:"finished_at"`
-	DurationMS int64     `json:"duration_ms"`
+	Vantage string `json:"vantage,omitempty"`
+	// Placeholder marks a run graded against example answers rather than a real
+	// environment. It rides in the report so a shared screenshot or a stored
+	// baseline carries the caveat, not just the terminal session that made it.
+	Placeholder bool      `json:"placeholder_answers,omitempty"`
+	Invasive    bool      `json:"invasive"`
+	StartedAt   time.Time `json:"started_at"`
+	FinishedAt  time.Time `json:"finished_at"`
+	DurationMS  int64     `json:"duration_ms"`
 }
 
 // Summary is the roll-up. Renderers display it; the exit code is derived from

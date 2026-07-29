@@ -21,6 +21,17 @@ const APIVersion = "vksinspect/v1alpha1"
 // Kind of the config document.
 const Kind = "EnvironmentSpec"
 
+// PlaceholderLabel marks a config whose answers came from prompt examples
+// rather than from an operator. It lives on the config, not on a CLI flag, so
+// that a file saved today still declares its own provenance when someone runs
+// it in three weeks with no memory of how it was made.
+const PlaceholderLabel = "vksinspect.io/placeholder-answers"
+
+// FromPlaceholders reports whether this config was built from example answers.
+func (c *Config) FromPlaceholders() bool {
+	return c != nil && c.Metadata.Labels[PlaceholderLabel] == "true"
+}
+
 // Config is the root document.
 type Config struct {
 	APIVersion string   `yaml:"apiVersion" json:"apiVersion"`
@@ -186,7 +197,12 @@ type Kubernetes struct {
 	// ExternalCIDRs are ranges outside the deployment that the plan must not
 	// collide with — existing corporate subnets, other clusters, VPN pools.
 	// Overlap math is only as good as this list.
-	ExternalCIDRs []string `yaml:"externalCIDRs,omitempty" json:"externalCIDRs,omitempty"`
+	//
+	// Deliberately NOT omitempty. nil means "nobody has been asked"; an empty
+	// list means "asked, and the answer was none". Those are different facts and
+	// collapsing them makes a saved config re-prompt forever, which defeats the
+	// point of saving one. The empty list must survive a YAML round trip.
+	ExternalCIDRs []string `yaml:"externalCIDRs" json:"externalCIDRs"`
 }
 
 // NSX describes the NSX objects a Supervisor-on-NSX deployment consumes.

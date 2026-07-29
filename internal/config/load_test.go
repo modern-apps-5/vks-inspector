@@ -165,3 +165,28 @@ scale:
 policy:
   allowInvasive: false
 `
+
+// nil and empty are different answers for externalCIDRs: nil means "nobody has
+// been asked", empty means "asked, and the answer was none". Collapsing them
+// makes a saved config re-prompt forever, which defeats the point of saving it.
+func TestEmptyExternalCIDRsSurvivesARoundTrip(t *testing.T) {
+	t.Parallel()
+
+	answered := strings.Replace(minimalConfig,
+		"  serviceCIDR: 10.96.0.0/22\n",
+		"  serviceCIDR: 10.96.0.0/22\n  externalCIDRs: []\n", 1)
+
+	cfg := mustParse(t, answered)
+	if cfg.Kubernetes.ExternalCIDRs == nil {
+		t.Fatal("an explicit empty list was read back as nil — the answer was lost")
+	}
+	if len(cfg.Kubernetes.ExternalCIDRs) != 0 {
+		t.Errorf("got %v, want empty", cfg.Kubernetes.ExternalCIDRs)
+	}
+
+	// Absent means never asked, and must stay distinguishable.
+	unanswered := mustParse(t, minimalConfig)
+	if unanswered.Kubernetes.ExternalCIDRs != nil {
+		t.Error("an absent key should read back as nil, not as an empty list")
+	}
+}

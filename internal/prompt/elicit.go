@@ -28,6 +28,18 @@ func Elicit(p *Prompter, cfg *config.Config, discovered *Discovered) error {
 		cfg.Kind = config.Kind
 	}
 
+	if p.UseExamples {
+		p.Warn(
+			"PLACEHOLDER ANSWERS ENABLED (--defaults)",
+			"",
+			"Pressing Enter accepts an illustrative example, not a fact about your",
+			"environment. Every check will still run and may report PASS — against",
+			"addresses that describe nobody's network.",
+			"",
+			"Use this to exercise the CLI. Never to assess readiness.",
+		)
+	}
+
 	if discovered != nil && discovered.Any() {
 		p.Section("Discovered from vCenter")
 		for _, line := range discovered.Lines() {
@@ -52,7 +64,20 @@ func Elicit(p *Prompter, cfg *config.Config, discovered *Discovered) error {
 	if err := elicitTopologySpecific(p, cfg); err != nil {
 		return err
 	}
-	return elicitScale(p, cfg)
+	if err := elicitScale(p, cfg); err != nil {
+		return err
+	}
+
+	// Record placeholder use in the config itself, so a saved file and every
+	// report derived from it carry the caveat rather than relying on someone
+	// remembering which flag they used.
+	if p.UsedExample {
+		if cfg.Metadata.Labels == nil {
+			cfg.Metadata.Labels = map[string]string{}
+		}
+		cfg.Metadata.Labels[config.PlaceholderLabel] = "true"
+	}
+	return nil
 }
 
 func elicitIdentity(p *Prompter, cfg *config.Config) error {
@@ -219,7 +244,9 @@ func elicitNetworks(p *Prompter, cfg *config.Config) error {
 		cfg.Kubernetes.ServiceCIDR = v
 	}
 
-	if len(cfg.Kubernetes.ExternalCIDRs) == 0 {
+	// nil, not len()==0: an operator who answered "none" has answered, and must
+	// not be asked again every time they reuse the file.
+	if cfg.Kubernetes.ExternalCIDRs == nil {
 		// Asked explicitly, with the consequence stated, because an empty list
 		// silently reduces cidr.external-collision to a no-op and the operator
 		// deserves to know that before the report says "no collisions".
@@ -230,6 +257,9 @@ func elicitNetworks(p *Prompter, cfg *config.Config) error {
 			"10.0.0.0/8, 172.16.0.0/12, 192.168.50.10", normCIDR)
 		if err != nil {
 			return err
+		}
+		if v == nil {
+			v = []string{} // answered, and the answer was none
 		}
 		cfg.Kubernetes.ExternalCIDRs = v
 	}

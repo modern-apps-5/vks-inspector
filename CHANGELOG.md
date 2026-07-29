@@ -14,6 +14,15 @@ This project has not cut a release yet; everything below is unreleased.
 Unimplemented commands exit 3 (tool error) rather than 0, so a pipeline calling
 one by mistake fails loudly instead of recording a spurious pass.
 
+**`--defaults`** accepts each prompt's illustrative example on Enter, so the
+whole flow can be walked without inventing answers. **For exercising the CLI
+only.** The answers describe no real environment, yet the checks still run and
+may report PASS — so a run that used it is marked in three places: a banner
+before the questions, a caveat line in the report next to the verdict, and a
+label written into the saved config so a file reused weeks later still declares
+its own provenance. Optional lists are never auto-filled: fabricating the
+"existing networks" list would turn a truthful skip into a false pass.
+
 **Interactive flow.** `vksinspect check --vcenter <fqdn>` prompts for what it
 cannot determine, then runs. `--save-config` writes the answers out; the saved
 file makes every later run non-interactive. `--non-interactive` turns a missing
@@ -98,6 +107,11 @@ unverified), `docs/CHECK-TAXONOMY.md`, `docs/test-coverage.md`, and 14 ADRs.
   accepted where a single host is a legitimate answer and stored as `/32`. A
   prefix with host bits set is still refused — `192.168.200.5/24` is genuinely
   ambiguous — but the error names the masked form so the fix is one edit away.
+- **A saved config re-prompted for a question that had already been answered.**
+  An empty `externalCIDRs` was indistinguishable from an unanswered one, so
+  every re-run asked again — defeating the point of `--save-config`. `nil` now
+  means "never asked" and `[]` means "asked, answer was none", and the empty
+  list survives a YAML round trip.
 - A network's own static range was reported as colliding with its own subnet.
   Containment there is required, not a conflict; the check now excludes
   parent/child pairs and `range.containment` asserts the containment separately.

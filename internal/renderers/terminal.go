@@ -62,6 +62,9 @@ func (t *Terminal) Render(w io.Writer, rep *results.Report) error {
 	bw.printf("  mode      %s\n", rep.Run.Mode)
 	bw.printf("  topology  %s\n", rep.Run.Topology)
 	bw.printf("  vantage   %s\n", rep.Run.Vantage)
+	if rep.Run.Placeholder {
+		bw.printf("  answers   %s\n", t.paint(cYellow, "PLACEHOLDER — example values, not a real environment"))
+	}
 	if rep.Run.Invasive {
 		bw.printf("  probes    %s\n", t.paint(cYellow, "invasive probes ENABLED"))
 	} else {
@@ -142,6 +145,13 @@ func (t *Terminal) renderSummary(bw *errWriter, rep *results.Report) {
 		bw.printf("          exit code %d (%s)\n",
 			results.ExitCode(rep.Results), results.ExitCodeText(results.ExitCode(rep.Results)))
 		return
+	}
+
+	// A green verdict on invented addresses is the most dangerous output this
+	// tool can produce. Say so where the verdict is, not only in the header.
+	if rep.Run.Placeholder {
+		bw.printf("          %s\n", t.paint(cYellow,
+			"graded against PLACEHOLDER answers — this is not a readiness assessment"))
 	}
 
 	switch code := results.ExitCode(rep.Results); code {

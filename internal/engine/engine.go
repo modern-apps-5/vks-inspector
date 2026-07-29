@@ -127,6 +127,7 @@ func Run(ctx context.Context, reg *registry.Registry, opts Options) (*results.Re
 		Layer:        string(layerOrBoth(opts.Layer)),
 		ConfigDigest: opts.Config.Digest(),
 		Vantage:      vantage,
+		Placeholder:  opts.Config.FromPlaceholders(),
 		Invasive:     rc.Invasive,
 		StartedAt:    started,
 		FinishedAt:   finished,

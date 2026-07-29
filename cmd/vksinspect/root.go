@@ -27,6 +27,7 @@ type globalOpts struct {
 	layer          results.Layer
 	layerFlag      string
 	nonInteractive bool
+	useDefaults    bool
 	saveConfig     string
 	format         string
 	output         string
@@ -47,6 +48,9 @@ func (g *globalOpts) bind(cmd *cobra.Command) {
 	f.StringVar(&g.layerFlag, "layer", "both", "which prerequisites to check: supervisor | vks | both")
 	f.BoolVar(&g.nonInteractive, "non-interactive", false,
 		"never prompt; anything missing is an error naming the config field it belongs in")
+	f.BoolVar(&g.useDefaults, "defaults", false,
+		"accept each prompt's illustrative example on Enter. FOR EXERCISING THE CLI ONLY — "+
+			"the answers describe no real environment, yet checks will still run and may report PASS")
 	f.StringVar(&g.saveConfig, "save-config", "", "write the assembled config to this path for non-interactive re-runs")
 	f.StringVar(&g.credsPath, "credentials", "", "path to a credentials YAML; env vars "+creds.EnvPrefix+"* override it")
 	f.StringVarP(&g.format, "format", "f", "terminal", "output format: "+fmt.Sprint(renderers.Formats()))

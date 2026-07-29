@@ -37,8 +37,29 @@ type Prompter struct {
 	// Interactive is false in CI or under --non-interactive. Every Ask then
 	// fails rather than defaulting.
 	Interactive bool
+
+	// UseExamples turns each prompt's illustrative example into its default, so
+	// Enter walks the whole flow. This exists for exercising the CLI, and it is
+	// dangerous in the field: the answers describe nobody's environment, yet the
+	// checks will grade them and report PASS. Callers must set UsedExample to
+	// visible effect — see cmd/vksinspect and ADR-0015.
+	UseExamples bool
+	// UsedExample records whether any answer actually came from an example
+	// rather than from the operator.
+	UsedExample bool
+
 	// pending holds a declared-but-unprinted section heading.
 	pending string
+}
+
+// defaultFor returns the default to offer for a prompt, substituting the
+// example when running with UseExamples.
+func (p *Prompter) defaultFor(example, def string) string {
+	if def != "" || !p.UseExamples || example == "" {
+		return def
+	}
+	p.UsedExample = true
+	return example
 }
 
 // New returns a Prompter reading from in and writing to out.
@@ -68,6 +89,10 @@ func (p *Prompter) Select(question string, choices []Choice, def string) (string
 	}
 	if len(choices) == 1 {
 		return choices[0].Value, nil
+	}
+	if def == "" && p.UseExamples {
+		def = choices[0].Value
+		p.UsedExample = true
 	}
 	if !p.Interactive {
 		if def != "" {
@@ -126,6 +151,7 @@ type Validator func(string) (string, error)
 // prompt with no example makes the operator guess at the format, and they will
 // guess wrong. Pass "" only when the shape is genuinely self-evident.
 func (p *Prompter) Ask(question, example, def string, validate Validator) (string, error) {
+	def = p.defaultFor(example, def)
 	if !p.Interactive {
 		if def != "" {
 			return def, nil
@@ -199,6 +225,12 @@ func (p *Prompter) AskListOptional(question, example string, validate Validator)
 
 func (p *Prompter) askList(question, example string, def []string, validate Validator, allowEmpty bool) ([]string, error) {
 	defStr := strings.Join(def, ", ")
+	// An optional list stays empty on Enter even under UseExamples: filling it
+	// in would fabricate the very "existing networks" list whose absence the
+	// report is supposed to disclose.
+	if !allowEmpty {
+		defStr = p.defaultFor(example, defStr)
+	}
 
 	if !p.Interactive {
 		if defStr != "" {
@@ -272,6 +304,21 @@ func (p *Prompter) Confirm(question string, def bool) (bool, error) {
 			return false, nil
 		}
 	}
+}
+
+// Warn prints a prominent notice. Used for the placeholder-answers banner,
+// which must be impossible to miss.
+func (p *Prompter) Warn(lines ...string) {
+	if !p.Interactive {
+		return
+	}
+	p.flushSection()
+	rule := strings.Repeat("!", 74)
+	fmt.Fprintf(p.out, "\n%s\n", rule)
+	for _, l := range lines {
+		fmt.Fprintf(p.out, "  %s\n", l)
+	}
+	fmt.Fprintf(p.out, "%s\n", rule)
 }
 
 // Section declares a heading. It is printed lazily, only if a question in it is
