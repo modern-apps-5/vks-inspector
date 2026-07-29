@@ -9,7 +9,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/modern-apps-5/vks-inspector/internal/buildinfo"
-	"github.com/modern-apps-5/vks-inspector/internal/config"
 	"github.com/modern-apps-5/vks-inspector/internal/creds"
 	"github.com/modern-apps-5/vks-inspector/internal/renderers"
 	"github.com/modern-apps-5/vks-inspector/internal/results"
@@ -19,22 +18,36 @@ import (
 // because every mode needs them: the moment one of these becomes a
 // `check`-only flag, some internal package has started assuming preflight.
 type globalOpts struct {
-	configPath  string
-	credsPath   string
-	format      string
-	output      string
-	verbose     bool
-	showSkipped bool
-	noColour    bool
-	invasive    bool
-	only        []string
-	skip        []string
-	timeout     time.Duration
+	configPath string
+	credsPath  string
+	// vcenter is the entry point. Everything else the tool can discover from
+	// it, it should — see docs/ADR/0011-vcenter-first-discovery.md.
+	vcenter        string
+	topology       string
+	layer          results.Layer
+	layerFlag      string
+	nonInteractive bool
+	saveConfig     string
+	format         string
+	output         string
+	verbose        bool
+	showSkipped    bool
+	noColour       bool
+	invasive       bool
+	only           []string
+	skip           []string
+	timeout        time.Duration
 }
 
 func (g *globalOpts) bind(cmd *cobra.Command) {
 	f := cmd.PersistentFlags()
-	f.StringVarP(&g.configPath, "config", "c", "", "path to the environment config YAML (required for all modes)")
+	f.StringVar(&g.vcenter, "vcenter", "", "vCenter FQDN or address — the entry point; other endpoints are discovered from it")
+	f.StringVarP(&g.configPath, "config", "c", "", "path to a saved environment config YAML; anything it does not answer is prompted for")
+	f.StringVar(&g.topology, "topology", "", "topology as networking+loadBalancer, e.g. nsx+alb (skips those two prompts)")
+	f.StringVar(&g.layerFlag, "layer", "both", "which prerequisites to check: supervisor | vks | both")
+	f.BoolVar(&g.nonInteractive, "non-interactive", false,
+		"never prompt; anything missing is an error naming the config field it belongs in")
+	f.StringVar(&g.saveConfig, "save-config", "", "write the assembled config to this path for non-interactive re-runs")
 	f.StringVar(&g.credsPath, "credentials", "", "path to a credentials YAML; env vars "+creds.EnvPrefix+"* override it")
 	f.StringVarP(&g.format, "format", "f", "terminal", "output format: "+fmt.Sprint(renderers.Formats()))
 	f.StringVarP(&g.output, "output", "o", "-", "write output to a file instead of stdout")
@@ -48,12 +61,18 @@ func (g *globalOpts) bind(cmd *cobra.Command) {
 	f.DurationVar(&g.timeout, "timeout", 60*time.Second, "per-check timeout")
 }
 
-// loadConfig is shared by every mode that needs one.
-func (g *globalOpts) loadConfig() (*config.Config, error) {
-	if g.configPath == "" {
-		return nil, fmt.Errorf("--config is required; see config/example.yaml")
+// resolveLayer validates --layer. Done once, up front, so an invalid value
+// fails before the operator answers twenty questions.
+func (g *globalOpts) resolveLayer() error {
+	l := results.Layer(g.layerFlag)
+	if g.layerFlag == "" {
+		l = results.LayerBoth
 	}
-	return config.Load(g.configPath)
+	if !l.Valid() {
+		return fmt.Errorf("--layer %q must be one of %v", g.layerFlag, results.AllLayers)
+	}
+	g.layer = l
+	return nil
 }
 
 // loadCreds never fails on absence. Missing credentials are a capability
@@ -111,7 +130,10 @@ Exit codes are contractual:
   3  tool error — the run says nothing about the environment`,
 		SilenceUsage:  true,
 		SilenceErrors: false,
-		Version:       fmt.Sprintf("%s (commit %s, built %s)", buildinfo.Version, buildinfo.Commit, buildinfo.Date),
+		PersistentPreRunE: func(*cobra.Command, []string) error {
+			return g.resolveLayer()
+		},
+		Version: fmt.Sprintf("%s (commit %s, built %s)", buildinfo.Version, buildinfo.Commit, buildinfo.Date),
 	}
 	g.bind(root)
 

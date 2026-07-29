@@ -26,10 +26,18 @@ metadata:
     owner: platform-team
     stage: lab
 
-# One of: nsx | nsx-alb | vds-alb | vds-haproxy | nsx-vpc
-# This selects which requirement rows apply. Everything below is interpreted
-# through it.
-topology: nsx
+# Topology is two independent axes, because they are two independent decisions
+# and requirements attach to whichever one they actually depend on. The NSX
+# overlay MTU requirement depends on `networking` and is indifferent to which
+# load balancer sits in front of it.
+#
+#   networking:   vds | nsx | nsx-vpc
+#   loadBalancer: nsx-lb | alb | haproxy
+#
+# Not every combination is valid — `vksinspect explain` lists the supported set.
+topology:
+  networking: nsx
+  loadBalancer: nsx-lb
 
 infrastructure:
   vcenter:
@@ -125,8 +133,8 @@ networks:
   # Supervisor and TKG node interfaces land, and portGroup is required.
   workload:
     - name: workload-primary
-      cidr: 10.20.0.0/16
-      gateway: 10.20.0.1
+      cidr: 100.100.0.0/16
+      gateway: 100.100.0.1
       mtu: 1500
       routable: true
 
@@ -146,10 +154,13 @@ networks:
 
 kubernetes:
   # Cluster-internal, normally non-routable — but still must not collide with
-  # anything the cluster has to reach.
+  # anything the cluster has to reach, including the corporate ranges declared
+  # in externalCIDRs below. The commonly-copied 10.244.0.0/20 pod CIDR sits
+  # inside 10.0.0.0/8 and would collide with a site that owns all of 10/8;
+  # these values are chosen so the shipped example passes its own checks.
   podCIDRs:
-    - 10.244.0.0/20
-  serviceCIDR: 10.96.0.0/22
+    - 100.96.0.0/16
+  serviceCIDR: 100.64.0.0/18
 
   # NSX-topology concepts. Ingress = LB VIPs, Egress = SNAT addresses.
   # FLAGGED: sizing guidance (historically ~1 SNAT IP per namespace) needs
@@ -165,6 +176,7 @@ kubernetes:
   externalCIDRs:
     - 10.0.0.0/8
     - 172.16.0.0/12
+    - 192.168.0.0/16
 
 nsx:
   tier0Gateway: T0-Edge-01
