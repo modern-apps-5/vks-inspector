@@ -4,18 +4,22 @@ VKS Inspector project aims to quickly indentify common misconfigurations and err
 ## Test Coverage
   ### 
   - [ ] DNS forward and reverse resolution should work for vCenter and NSX Manager.
-  - [ ] Ping/curl various network end points that they are reachable (DNS, NTP, VCenter, NSX Manager, <<Break these out separately>>)
+  - [ ] MTU Checker for VPC based Supervisor deployments
+  - [ ] Duplicate IP Validation
+  - [ ] Ping/curl vCenter
+  - [ ] Ping/curl DNS
+  - [ ] Ping/curl NTP
+  - [ ] Ping/curl NSX Manager
   - [ ] Validate vSphere API is accessible and provided credentials are valid.
   - [ ] Validate existence of VDS specified in configuration YAML is valid.
   - [ ] NTP drift between vCenter and ESXi hosts in Cluster is less than specified max(30 seconds).
-  - [ ] AVI Controller Login and SW Version
-  - [ ] AVI Service Engine Health Score above 75 for all Service Engines.
-  - [ ] AVI Virtual Service Health Score above 75 for all Virtual Services.
-  - [ ] AVI Load Balancer Pool Health Score above 75 for all Pools 
-  - [x] 
-  - [x]
-  - [x] 
-  - [x] 
+  - [ ] VDS/Avi Deployment - AVI Controller Reachability Login and SW Version
+  - [ ] VDS/Avi Deployment - Reachability of Data/VIP Network Range 
+  - [ ] 
+  - [] 
+  - []
+  - [] 
+  - [] 
   - [ ] 
   - [ ] 
   - [ ] 
