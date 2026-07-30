@@ -117,6 +117,14 @@ func (c RangeContainment) Run(ctx context.Context, rc *checks.RunContext) ([]res
 			inspect("alb.seDataNetwork", *cfg.ALB.SEDataNetwork)
 		}
 	}
+	if cfg.FLB != nil {
+		if cfg.FLB.VIPNetwork != nil {
+			inspect("flb.vipNetwork", *cfg.FLB.VIPNetwork)
+		}
+		if cfg.FLB.TransitNetwork != nil {
+			inspect("flb.transitNetwork", *cfg.FLB.TransitNetwork)
+		}
+	}
 
 	if len(found) > 0 {
 		return append(out, found...), nil

@@ -81,6 +81,7 @@ func TestGradesEveryTopologyCombination(t *testing.T) {
 		{"nsx with alb", topo(config.NetNSX, config.LBALB), results.StatusPass},
 		{"vds with alb", topo(config.NetVDS, config.LBALB), results.StatusPass},
 		{"vds with haproxy is supported but caveated", topo(config.NetVDS, config.LBHAProxy), results.StatusPass},
+		{"vds with flb is supported but caveated", topo(config.NetVDS, config.LBFLB), results.StatusPass},
 		{"nsx-vpc with alb is supported but caveated", topo(config.NetNSXVPC, config.LBALB), results.StatusPass},
 		// The axes are independent but not freely combinable. An unsupported
 		// pairing of two individually-valid values must fail: telling someone

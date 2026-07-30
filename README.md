@@ -20,13 +20,22 @@ cluster ones. There is no VKS without a Supervisor, so the majority of "is this
 ready for VKS" questions are really "can the Supervisor be enabled here"
 questions. See [ADR-0012](docs/ADR/0012-supervisor-vks-layers.md).
 
-> **Status: early.** 18 checks implemented — address-plan arithmetic, network
-> probes, and vCenter inventory. **No NSX or ALB client yet**, and no ICMP,
-> duplicate-IP or path-MTU probes. Those report as skips with a reason.
+> **Status: early.** 20 checks implemented — address-plan arithmetic, network
+> probes, and vCenter inventory. **No NSX or ALB controller / HAProxy Data
+> Plane API checks yet** (their vCenter-version checks are implemented; the
+> controller/appliance-level checks are not), and no ICMP, duplicate-IP or
+> path-MTU probes. Those report as skips with a reason.
 >
-> 46 of the 91 rows in [docs/REQUIREMENTS-MATRIX.md](docs/REQUIREMENTS-MATRIX.md)
-> are flagged as unconfirmed against current VCF 9 / VKS documentation, and no
-> check is built on a flagged row.
+> Those 20 checks cover **25 of the 97 rows** in
+> [docs/REQUIREMENTS-MATRIX.md](docs/REQUIREMENTS-MATRIX.md); 49 of those rows
+> are flagged as unconfirmed against current VCF 9 / VKS documentation. No
+> check *asserts* a flagged claim — four cite a flagged row but deliberately
+> parameterise the uncertain part (the clock-skew tolerance, for instance,
+> comes from your config rather than a number this tool invented).
+>
+> Each section of the matrix opens with a summary table showing exactly which
+> rows are implemented and what blocks the rest — generated from the check
+> registry, so it cannot drift from the code.
 >
 > **Do not read a passing run as a validated environment.** The tool says so
 > itself: a run that contacts nothing prints `NOTHING IN THIS RUN CONTACTED YOUR
@@ -218,7 +227,7 @@ DNS gets checked, the certificate validates properly, and you will not need
 
 ## What it checks
 
-18 checks. Each traces to a row in
+20 checks. Each traces to a row in
 [REQUIREMENTS-MATRIX.md](docs/REQUIREMENTS-MATRIX.md); `vksinspect explain <id>`
 prints the detail for any of them.
 
@@ -254,9 +263,14 @@ prints the detail for any of them.
 | `vc.vds-exists` | Same for the distributed switch |
 | `vc.vds-mtu` | Compares VDS MTU against the requirement your config declares; reports `unknown` if vCenter returns no MTU |
 | `vc.portgroup-exists` | One result per declared portgroup: existence, backing switch, and VLAN match (a trunk yields `unknown`, not a false pass) |
+| `flb.version-supported` | `loadBalancer: flb` only. Blocks if vCenter is older than 9.0 — Foundation Load Balancer does not exist before that |
+| `hap.version-supported` | `loadBalancer: haproxy` only. Warns (never blocks) once vCenter reaches the 9.x generation, where HAProxy is being phased out; fully supported on 8.x |
 
-**Not implemented:** NSX and ALB clients, ICMP/gateway, duplicate-IP detection,
-path-MTU discovery, and every check tracing to a flagged matrix row.
+**Not implemented:** NSX and ALB controller checks, the HAProxy Data Plane API
+checks, and the rest of FLB's checks (FLB has no separate controller client —
+it is configured through vCenter, not one of its own), ICMP/gateway,
+duplicate-IP detection, path-MTU discovery, and every check tracing to a
+flagged matrix row.
 
 ---
 
@@ -370,10 +384,10 @@ BLOCK The workload-primary network sits entirely inside the Kubernetes service C
                 Kubernetes service CIDR is cluster-internal and does not need
                 to be routable, so it is usually the easier to move...
 
-checks    13 ran of 18 in this build — 5 config-only, 8 network probe(s), 0 API check(s)
+checks    13 ran of 20 in this build — 5 config-only, 8 network probe(s), 0 API check(s)
           no vcenter access — 4 check(s) could not run, so nothing above covers it
 
-summary  18 checks: 7 passed, 1 failed, 9 skipped, 1 indeterminate, 0 errors
+summary  20 checks: 7 passed, 1 failed, 11 skipped, 1 indeterminate, 0 errors
          1 blocker(s) must be fixed before deployment
          exit code 1 (one or more blockers failed)
 ```
@@ -496,7 +510,7 @@ metadata:
 
 topology:                     # two independent axes — see Topologies below
   networking: nsx             # vds | nsx | nsx-vpc
-  loadBalancer: nsx-lb        # nsx-lb | alb | haproxy
+  loadBalancer: nsx-lb        # nsx-lb | alb | haproxy | flb
 
 infrastructure:
   vcenter:
@@ -542,6 +556,7 @@ networks:
   workload:
     - { name: workload-primary, cidr: 10.20.0.0/16, gateway: 10.20.0.1, routable: true }
   # frontend: {...}            # VIP network; required for ALB and HAProxy
+                               # (FLB declares its own vipNetwork/transitNetwork instead — see below)
 
 kubernetes:
   podCIDRs: [100.96.0.0/16]    # cluster-internal
@@ -562,6 +577,7 @@ nsx:                           # networking: nsx or nsx-vpc
 
 # alb: {...}                   # loadBalancer: alb
 # haproxy: {...}               # loadBalancer: haproxy
+# flb: {...}                   # loadBalancer: flb; no controller endpoint — configured through vCenter
 
 scale:                         # drives pool-sizing checks
   supervisorControlPlaneNodes: 3
@@ -598,11 +614,23 @@ requirements attach to whichever one they actually depend on
 |---|---|---|---|
 | `vds` | vSphere Distributed Switch | `nsx-lb` | NSX built-in load balancer |
 | `nsx` | NSX | `alb` | NSX Advanced Load Balancer (Avi) |
-| `nsx-vpc` | NSX VPC-based (VCF 9) ⚑ | `haproxy` | HAProxy ⚑ *legacy* |
+| `nsx-vpc` | NSX VPC-based (VCF 9) ⚑ | `haproxy` | HAProxy *(8.x; phased out on 9.x)* |
+| | | `flb` | Foundation Load Balancer *(9.0+ only)* |
 
-Supported combinations: `vds+alb`, `vds+haproxy` ⚑, `nsx+nsx-lb`, `nsx+alb`,
-`nsx-vpc+nsx-lb` ⚑, `nsx-vpc+alb` ⚑. Anything else is rejected rather than
-assumed workable.
+Supported combinations: `vds+alb`, `vds+haproxy`, `vds+flb`, `nsx+nsx-lb`,
+`nsx+alb`, `nsx-vpc+nsx-lb` ⚑, `nsx-vpc+alb` ⚑. Anything else is rejected
+rather than assumed workable.
+
+`flb` differs from `alb`/`haproxy` in one structural way worth knowing: FLB has
+no separate controller/appliance to declare credentials for. It runs as VM(s)
+inside vCenter's own Supervisor resource pool, so its config block (`flb:`)
+carries no `credentialRef` and the tool's vCenter access covers it.
+
+`flb` and `haproxy` are also opposite ends of the same vCenter-version boundary:
+FLB does not exist before vCenter 9.0 (`flb.version-supported` blocks below
+that), while HAProxy is fully supported on vCenter 8.x and is being phased out
+starting with 9.x (`hap.version-supported` warns, never blocks — it still
+works, it just should not be a new design).
 
 ⚑ works, but its requirement coverage is unverified. `nsx-vpc` in particular has
 **no VPC-specific checks at all** yet — every VPC row in the matrix is flagged, so

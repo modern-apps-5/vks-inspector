@@ -83,6 +83,13 @@ func TestStructuralValidation(t *testing.T) {
 			wantErr: "requires an `nsx:` block",
 		},
 		{
+			name: "vds+flb topology without an flb block is incoherent",
+			yaml: strings.Replace(
+				strings.Replace(minimalConfig, "networking: nsx", "networking: vds", 1),
+				"loadBalancer: nsx-lb", "loadBalancer: flb", 1),
+			wantErr: "requires an `flb:` block",
+		},
+		{
 			name:    "missing metadata.name",
 			yaml:    strings.Replace(minimalConfig, "  name: digest-test\n", "", 1),
 			wantErr: "metadata.name",

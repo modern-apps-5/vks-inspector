@@ -10,6 +10,7 @@ import (
 	"github.com/modern-apps-5/vks-inspector/internal/checks"
 	"github.com/modern-apps-5/vks-inspector/internal/checks/alb"
 	"github.com/modern-apps-5/vks-inspector/internal/checks/configval"
+	"github.com/modern-apps-5/vks-inspector/internal/checks/flb"
 	"github.com/modern-apps-5/vks-inspector/internal/checks/network"
 	"github.com/modern-apps-5/vks-inspector/internal/checks/nsx"
 	"github.com/modern-apps-5/vks-inspector/internal/checks/reference"
@@ -28,6 +29,7 @@ func Registry() *registry.Registry {
 	set = append(set, vcenter.Checks()...)   // class (b) — credentialed
 	set = append(set, nsx.Checks()...)       // class (b) — credentialed
 	set = append(set, alb.Checks()...)       // class (b) — credentialed
+	set = append(set, flb.Checks()...)       // class (b) — vCenter-credentialed, no dedicated controller
 
 	// The reference check is told how many checks the build knows about, which
 	// is only knowable here. +1 for itself.

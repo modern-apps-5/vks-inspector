@@ -50,6 +50,7 @@ type Config struct {
 	NSX            *NSX           `yaml:"nsx,omitempty"     json:"nsx,omitempty"`
 	ALB            *ALB           `yaml:"alb,omitempty"     json:"alb,omitempty"`
 	HAProxy        *HAProxy       `yaml:"haproxy,omitempty" json:"haproxy,omitempty"`
+	FLB            *FLB           `yaml:"flb,omitempty"     json:"flb,omitempty"`
 
 	Scale  Scale  `yaml:"scale"  json:"scale"`
 	Policy Policy `yaml:"policy" json:"policy"`
@@ -259,6 +260,34 @@ type HAProxy struct {
 	// CACertRef references the appliance CA certificate by file path or
 	// credential key — never inline PEM containing anything secret.
 	CACertRef string `yaml:"caCertRef,omitempty" json:"caCertRef,omitempty"`
+}
+
+// FLB describes a Foundation Load Balancer deployment (VCF 9.1+).
+//
+// Unlike ALB and HAProxy, FLB has no separate controller to authenticate
+// against: it runs as VM(s) inside the Supervisor's own folder and resource
+// pool and is configured through vCenter. There is deliberately no Endpoint or
+// CredentialRef here — see docs/REQUIREMENTS-MATRIX.md LB-FLB-* and
+// internal/checks/flb.
+type FLB struct {
+	// Mode is the network-arm topology: "two-arm" (separate transit and
+	// virtual server networks), "one-arm" (combined virtual server/transit,
+	// separate management), or "one-arm-one-nic" (single interface for
+	// everything; Simplified Supervisor deployments only).
+	Mode string `yaml:"mode,omitempty" json:"mode,omitempty"`
+	// Size is the deployment size: small, medium, large, or extra-large.
+	// TODO(matrix): confirm whether size is discoverable or must be declared —
+	// matrix row LB-FLB-004.
+	Size string `yaml:"size,omitempty" json:"size,omitempty"`
+	// HA reports whether FLB is deployed as two VMs in an active-passive pair,
+	// rather than a single VM.
+	HA bool `yaml:"ha,omitempty" json:"ha,omitempty"`
+	// VIPNetwork is the Virtual Server Network FLB allocates load balancer
+	// VIPs from.
+	VIPNetwork *NetworkSpec `yaml:"vipNetwork,omitempty" json:"vipNetwork,omitempty"`
+	// TransitNetwork carries traffic from FLB to workload IP pool members.
+	// Used in the two-arm mode only; empty for one-arm and one-arm-one-nic.
+	TransitNetwork *NetworkSpec `yaml:"transitNetwork,omitempty" json:"transitNetwork,omitempty"`
 }
 
 // Scale is the intended size of the deployment. Pool-sizing checks are pure

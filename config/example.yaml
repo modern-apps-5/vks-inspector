@@ -32,7 +32,7 @@ metadata:
 # load balancer sits in front of it.
 #
 #   networking:   vds | nsx | nsx-vpc
-#   loadBalancer: nsx-lb | alb | haproxy
+#   loadBalancer: nsx-lb | alb | haproxy | flb
 #
 # Not every combination is valid — `vksinspect explain` lists the supported set.
 topology:
@@ -230,6 +230,29 @@ nsx:
 #   dataPlanePort: 5556
 #   loadBalancerCIDR: 198.51.100.0/24
 #   caCertRef: /etc/vksinspect/haproxy-ca.pem
+
+# Only for topology: vds-flb.
+# Unlike alb/haproxy, FLB has no separate controller — no fqdn, no
+# credentialRef. It runs as VM(s) inside vCenter's own Supervisor resource
+# pool. Several fields below are FLAGGED; see matrix group LB-FLB.
+# flb:
+#   mode: two-arm               # two-arm | one-arm | one-arm-one-nic
+#   size: medium                # small | medium | large | extra-large
+#   ha: true                    # two VMs, active-passive, vs a single VM
+#   vipNetwork:
+#     name: flb-vip
+#     portGroup: PG-Frontend
+#     cidr: 198.51.100.0/24
+#     gateway: 198.51.100.1
+#     routable: true
+#     ranges:
+#       - start: 198.51.100.100
+#         end: 198.51.100.200
+#         purpose: load-balancer-vips
+#   transitNetwork:              # two-arm mode only
+#     name: flb-transit
+#     portGroup: PG-Transit
+#     cidr: 198.51.101.0/24
 
 # Intended size. Pool-sizing checks are arithmetic against these numbers, which
 # is why they are declared rather than discovered — the whole point of preflight

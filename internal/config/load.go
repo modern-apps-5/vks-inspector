@@ -86,6 +86,8 @@ func (c *Config) validateStructure() error {
 		errs = append(errs, fmt.Errorf("topology %q requires an `alb:` block", c.Topology))
 	case c.Topology.UsesHAProxy() && c.HAProxy == nil:
 		errs = append(errs, fmt.Errorf("topology %q requires a `haproxy:` block", c.Topology))
+	case c.Topology.UsesFLB() && c.FLB == nil:
+		errs = append(errs, fmt.Errorf("topology %q requires an `flb:` block", c.Topology))
 	}
 	if c.Topology.Networking == NetNSXVPC && (c.NSX == nil || c.NSX.VPC == nil) {
 		errs = append(errs, errors.New("networking nsx-vpc requires an `nsx.vpc:` block"))

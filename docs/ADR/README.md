@@ -27,3 +27,4 @@ advertising, not a record.
 | [0012](0012-supervisor-vks-layers.md) | Requirements are tagged Supervisor or VKS | Accepted |
 | [0013](0013-prompting-produces-config.md) | Prompting produces a config, not an alternative to one | Accepted |
 | [0014](0014-vcenter-first-discovery.md) | vCenter is the entry point; discover the rest | Accepted, partly implemented |
+| [0015](0015-flagged-rows-and-version-constants.md) | What a flag blocks, and when a version may be a constant | Accepted, refines 0008 |

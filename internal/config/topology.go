@@ -46,13 +46,17 @@ const (
 	// LBHAProxy — the HAProxy appliance.
 	// FLAGGED: believed deprecated/removed in the VCF 9 generation.
 	LBHAProxy LoadBalancer = "haproxy"
+	// LBFLB — Foundation Load Balancer (VCF 9.1+). Deployed as VM(s) inside
+	// vCenter itself rather than as a separately-managed controller/appliance;
+	// see the FLB struct in config.go and internal/checks/flb.
+	LBFLB LoadBalancer = "flb"
 )
 
 // AllNetworking and AllLoadBalancers are the canonical ordered lists. Prompts,
 // help text and docs iterate these so a new value cannot be half-added.
 var (
 	AllNetworking    = []Networking{NetVDS, NetNSX, NetNSXVPC}
-	AllLoadBalancers = []LoadBalancer{LBNSX, LBALB, LBHAProxy}
+	AllLoadBalancers = []LoadBalancer{LBNSX, LBALB, LBHAProxy, LBFLB}
 )
 
 // validCombinations is the validity table. A combination absent from this map
@@ -62,10 +66,14 @@ var (
 // The value is a note shown when the combination is unusual, empty when it is
 // the mainstream choice.
 var validCombinations = map[Topology]string{
-	{NetVDS, LBALB}:     "",
-	{NetVDS, LBHAProxy}: "HAProxy is believed deprecated in the VCF 9 generation; see matrix row LB-HAP-000",
-	{NetNSX, LBNSX}:     "",
-	{NetNSX, LBALB}:     "",
+	{NetVDS, LBALB}: "",
+	{NetVDS, LBHAProxy}: "HAProxy is fully supported on vCenter 8.x and is being phased out starting with " +
+		"vCenter 9.x — see matrix row LB-HAP-000 (checked by hap.version-supported, warning severity, never blocks)",
+	{NetVDS, LBFLB}: "Requires vCenter 9.0 or later — checked by flb.version-supported (blocker severity). " +
+		"Several other LB-FLB-* rows are flagged pending confirmation of the vCenter object model — " +
+		"see matrix section \"Load balancer — Foundation Load Balancer\"",
+	{NetNSX, LBNSX}: "",
+	{NetNSX, LBALB}: "",
 	// FLAGGED: which load balancers VPC-based networking supports is not
 	// confirmed. Both are permitted so the tool does not block a valid design,
 	// and both carry a note so nobody reads acceptance as confirmation.
@@ -117,6 +125,9 @@ func (t Topology) UsesALB() bool { return t.LoadBalancer == LBALB }
 // UsesHAProxy reports whether the HAProxy appliance is in play.
 func (t Topology) UsesHAProxy() bool { return t.LoadBalancer == LBHAProxy }
 
+// UsesFLB reports whether Foundation Load Balancer is in play.
+func (t Topology) UsesFLB() bool { return t.LoadBalancer == LBFLB }
+
 // UsesVDSPortGroups reports whether the deployment consumes named vSphere
 // portgroups for its workload networks, as opposed to NSX segments.
 func (t Topology) UsesVDSPortGroups() bool { return t.Networking == NetVDS }
@@ -167,6 +178,8 @@ func (lb LoadBalancer) Description() string {
 		return "NSX Advanced Load Balancer (Avi)"
 	case LBHAProxy:
 		return "HAProxy (legacy)"
+	case LBFLB:
+		return "Foundation Load Balancer (FLB)"
 	default:
 		return string(lb)
 	}

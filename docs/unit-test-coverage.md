@@ -57,6 +57,9 @@ Everything that is arithmetic, parsing, formatting or dispatch.
 | Network checks | `internal/checks/network/network_test.go` | All eight, via `probes.Fake`: DNS timeout vs NXDOMAIN, wrong-address resolution, per-resolver querying, PTR case-folding, config-driven severity escalation, TCP tri-state mapping, unsynchronised NTP sources, skew in both directions |
 | vCenter checks | `internal/checks/vcenter/vcenter_test.go` | All five against vcsim, end to end through real SOAP |
 | Address-plan checks | `internal/checks/configval/cidr_test.go` | All four implemented checks: overlap, external collision, infra collision, containment; the fan-out idiom; skip-not-pass when there is nothing to compare |
+| FLB version boundary | `internal/checks/flb/flb_test.go` | Blocks below vCenter 9.0, passes at and above; unreachable vCenter and unparseable versions report `unknown` rather than a verdict; applicability is `flb`-only |
+| HAProxy version boundary | `internal/checks/alb/alb_test.go` | Passes on vCenter 8.x, warns on 9.x; **asserts the severity stays `warning`** so a deprecation can never fail a working deployment by itself |
+| Matrix ↔ code agreement | `internal/docs/matrix_test.go` | Every cited requirement ID exists in the matrix; the generated summary tables match the registry. Both guards verified to fire by deliberately breaking each |
 
 ### The two patterns, already established
 
@@ -205,8 +208,12 @@ read this file.
 | (a) network-only | ~24 | All logic, via `probes.Fake` | — | Probe implementations |
 | (b) credentialed | ~48 | Check logic, via fake clients | **All** response parsing | Live client behaviour |
 
-Rough counts against the 88 rows in the matrix. Rows appearing in multiple
+Rough counts against the 97 rows in the matrix. Rows appearing in multiple
 classes are counted in each.
+
+These are counts of *requirements*, not of implemented checks. 25 rows have a
+check today; the per-section summary tables in the matrix are the authority on
+which, and are generated rather than maintained by hand.
 
 ---
 
@@ -236,20 +243,17 @@ Honest list, as of the phase-1 scaffold:
 2. **No test that the JUnit XML actually validates** against a schema or is
    accepted by a real CI collector. The mapping is opinionated (a failed warning
    is a `<failure>`) and unverified against any consumer.
-3. **No test that every registered check's `RequirementIDs` exist in the
-   matrix.** The registry panics on an *empty* list but cannot detect an
-   invented ID. This becomes checkable once the matrix has a machine-readable
-   form — see the `explain` TODO.
-4. **No fuzz testing of the config parser.** Worth adding once the schema
+3. **No fuzz testing of the config parser.** Worth adding once the schema
    settles; a malformed config should never panic.
-6. **`--save-config` round-tripping is untested.** The saved file is re-read in
+4. **`--save-config` round-tripping is untested.** The saved file is re-read in
    manual testing, but no test asserts that
    prompt → config → YAML → load → identical config holds.
-7. **`Elicit` itself is untested.** The prompt primitives are covered, but
+5. **`Elicit` itself is untested.** The prompt primitives are covered, but
    nothing drives a full question sequence and asserts the assembled
    `config.Config` — including that a value already supplied by config or flag
-   is never re-asked.
-5. **`internal/config.assertNoSecrets` is effectively unreachable** in normal
+   is never re-asked. The FLB question block added most recently is unexercised
+   for the same reason.
+6. **`internal/config.assertNoSecrets` is effectively unreachable** in normal
    use, because `yaml.KnownFields(true)` rejects unknown keys first. It is a
    belt-and-braces guard against a future struct field reintroducing a
    credential field, and the test acknowledges this rather than asserting a

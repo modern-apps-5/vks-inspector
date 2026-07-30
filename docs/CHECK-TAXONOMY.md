@@ -9,7 +9,7 @@ does when its inputs are missing, and how much of it can run on a laptop.
 |---|---|---|---|---|
 | **(c)** Config validation | Nothing | `internal/checks/configval` | — | Yes, always |
 | **(a)** Network-only | A host on the right segment | `internal/checks/network` | `network` | Unit-testable with a fake probe |
-| **(b)** Credentialed | Management-plane API access | `internal/checks/{vcenter,nsx,alb}` | `vcenter` / `nsx` / `alb` | Only with recorded fixtures |
+| **(b)** Credentialed | Management-plane API access | `internal/checks/{vcenter,nsx,alb,flb}` | `vcenter` / `nsx` / `alb` | Only with recorded fixtures |
 
 The ordering above is deliberate and is the order the engine runs them in.
 Class (c) is free, instant and deterministic; class (a) costs seconds and a
@@ -57,12 +57,14 @@ books a maintenance window.
 | `NSX-ING-002` ⚑ | Ingress range sized against expected LB services |
 | `NSX-EGR-002` ⚑ | Egress range sized against expected namespaces |
 | `NSX-POD-001` (part) ⚑ | Pod block sized against expected namespaces |
-| `LB-VIP-001` | VIP range containment in the frontend subnet |
-| `LB-VIP-002` | VIP range overlap with SE data and node ranges |
-| `LB-VIP-006` ⚑ | VIP range sized against expected LB services |
+| `LB-VIP-001` | VIP range containment in the frontend subnet (ALB and FLB) |
+| `LB-VIP-002` | VIP range overlap with SE data / transit and node ranges (ALB and FLB) |
+| `LB-VIP-006` ⚑ | VIP range sized against expected LB services (ALB and FLB) |
 | `VDS-WKL-001` ⚑ | Workload range sized against expected node count |
 | `COM-FW-006` (part) | `noProxy` covers internal ranges |
 | `MET-001` | Topology recognised |
+| `LB-FLB-002` | Declared arm mode (two-arm/one-arm/one-arm-one-nic) has its required networks |
+| `LB-FLB-003` ⚑ | `one-arm-one-nic` only used with a Simplified Supervisor (blocked on a missing config field) |
 
 **Two things this class is not:**
 
@@ -179,6 +181,10 @@ membership, license tiers.
 | `LB-ALB-002`…`007` ⚑ | ALB — version, cluster, license, cloud, SE group |
 | `LB-VIP-003`, `LB-VIP-004` | ALB — IPAM pools and allocation |
 | `LB-HAP-002`, `LB-HAP-003` | HAProxy — Data Plane API |
+| `LB-FLB-000` | vCenter — FLB version-existence boundary (implemented: `flb.version-supported`) |
+| `LB-HAP-000` | vCenter — HAProxy support-lifecycle boundary (implemented: `hap.version-supported`, warning severity) |
+| `LB-FLB-001` ⚑, `LB-FLB-004` ⚑ | vCenter — FLB VM placement/health and cluster HA prerequisites (no dedicated controller) |
+| `LB-FLB-005` ⚑ | vCenter — FLB VIP allocation state, if/when exposed (LOW confidence) |
 
 ### Rules this class must not break
 

@@ -67,6 +67,13 @@ test-integration:
 golden:
 	go test ./internal/renderers/... -update
 
+# Regenerate the per-section summary tables in docs/REQUIREMENTS-MATRIX.md after
+# adding or retargeting a check. `make test` fails if they are stale, so this is
+# not optional bookkeeping. Review the diff — it is the coverage claim we make.
+.PHONY: matrix
+matrix:
+	go test ./internal/docs/... -update
+
 .PHONY: fmt
 fmt:
 	go fmt ./...

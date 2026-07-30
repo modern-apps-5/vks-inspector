@@ -99,6 +99,14 @@ func declaredNetworks(cfg *config.Config) (nets []netx.Named, bad []badEntry) {
 	if cfg.HAProxy != nil {
 		add("haproxy.loadBalancerCIDR", "haproxy-vips", cfg.HAProxy.LoadBalancerCIDR, true)
 	}
+	if cfg.FLB != nil {
+		if cfg.FLB.VIPNetwork != nil {
+			addNetwork("flb.vipNetwork", *cfg.FLB.VIPNetwork)
+		}
+		if cfg.FLB.TransitNetwork != nil {
+			addNetwork("flb.transitNetwork", *cfg.FLB.TransitNetwork)
+		}
+	}
 	if cfg.NSX != nil && cfg.NSX.VPC != nil {
 		for i, c := range cfg.NSX.VPC.PrivateIPBlocks {
 			add(sprintf("nsx.vpc.privateIPBlocks[%d]", i), "vpc-private", c, false)

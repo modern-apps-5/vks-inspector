@@ -4,6 +4,32 @@ How to add to vks-inspector without breaking the properties the rest of it
 depends on. Read [ADR/](ADR/) for why any of these rules exist; this file is the
 operational summary.
 
+**Looking for something to work on?** The backlog lives in
+[REQUIREMENTS-MATRIX.md](REQUIREMENTS-MATRIX.md), not in a file of its own —
+each section opens with a generated summary table whose **Status** column says
+what this build does about every row. Grep it:
+
+```bash
+grep -n '| ready |'        docs/REQUIREMENTS-MATRIX.md  # settled; only the work is missing
+grep -n '| vantage |'      docs/REQUIREMENTS-MATRIX.md  # decide the vantage story first
+grep -n '| NSX client |'   docs/REQUIREMENTS-MATRIX.md  # unlocked by one client
+grep -n 'implemented\.\*'  docs/REQUIREMENTS-MATRIX.md  # per-section rollups
+```
+
+Those tables are generated from the registry by `make matrix` and verified by
+`make test`, so they cannot drift from the code. See
+[Status keys](REQUIREMENTS-MATRIX.md#status-keys) for what each value means.
+
+**Where the coverage is.** 25 of 97 rows are implemented. The binding
+constraint is not engineering time — 45 rows are blocked on confirming the
+requirement itself, and no amount of code moves those. Of what is actionable:
+
+- **11 rows need no new infrastructure**, though 6 of those are `vantage` rows
+  that need a design decision before anyone writes code.
+- **An NSX client unlocks 7 rows** — the largest single win available.
+- An ALB client unlocks 5. A HAProxy Data Plane client unlocks 2, on a topology
+  being phased out (`LB-HAP-000`) — weigh that before spending time there.
+
 ---
 
 ## The rule that governs every check
@@ -35,6 +61,8 @@ internal/
     configval/           Class (c): pure config arithmetic
     network/             Class (a): network-only probes             [stub]
     vcenter/ nsx/ alb/   Class (b): credentialed                    [stub]
+    flb/                 Class (b): vCenter-credentialed, no dedicated controller
+                          (flb.version-supported implemented; rest [stub])
     all/                 Explicit registration of everything above
   registry/              Check storage + selection with reasons
   engine/                Runs selected checks, assembles a Report. Mode-agnostic.
@@ -162,21 +190,35 @@ Recorded so absences are decisions rather than oversights.
   the largest untested surface in the tool.
 - `results.WriteBaseline`'s ordering guarantee is load-bearing for drift and has
   no round-trip test.
-- Nothing verifies that a check's cited requirement IDs actually exist in the
-  matrix. The registry rejects an *empty* list but cannot detect an invented ID.
+- ~~Nothing verifies that a check's cited requirement IDs actually exist in the
+  matrix.~~ **Closed.** `internal/docs` fails the build on an invented ID, and
+  on summary tables that have drifted from the registry.
+- The `blockedBy` map in `internal/docs/matrix_test.go` is hand-maintained. It
+  has to be — "this needs an NSX client" is a judgement about work not done,
+  not a fact derivable from work done. A missing entry degrades to `—` rather
+  than to a wrong claim.
 
 ## Open questions
 
 These change what gets built and are not ours to decide unilaterally.
 
-1. Is `vds+haproxy` in scope? Believed removed in VCF 9 — see `LB-HAP-000`.
+1. ~~Is `vds+haproxy` in scope?~~ **Resolved:** yes, operator-confirmed. HAProxy
+   is not removed in VCF 9 — it is fully supported on vCenter 8.x and being
+   phased out starting with 9.x. See `LB-HAP-000`, implemented by
+   `hap.version-supported` (warns, never blocks).
 2. Should duplicate-IP detection be `--invasive`? See `COM-ADR-001`.
 3. Should preflight check the *deployment* account's vCenter privileges, not
    just the tool's own read access? See `COM-API-001`.
 4. Two matrix rows need config fields that do not exist (declared DHCP scopes):
    `SUP-MGT-003`, `VDS-DHCP-001`. Add the fields or drop the rows.
 5. Where do version and port matrices come from — shipped with a release, or
-   supplied by the user? They must be data, never code.
+   supplied by the user? They must be data, never code — with one narrow
+   exception now settled in
+   [ADR-0015](ADR/0015-flagged-rows-and-version-constants.md): a single
+   existence or support-lifecycle boundary for one named product may be a
+   constant. `flb.version-supported` and `hap.version-supported` are the two,
+   and a third that does not fit that shape is evidence the carve-out was too
+   generous rather than precedent for widening it.
 6. Is a verify-mode result that is *better* than declared a pass or a drift?
 7. What exit code does `drift` use?
 8. `externalCIDRs` semantics: a site declaring `10.0.0.0/8` as must-not-collide

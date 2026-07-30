@@ -27,8 +27,13 @@ one as "go and find this", not "this was read".
 | `MED` | Believed correct for the TKGS / vSphere-with-Tanzu generation. Whether it survived unchanged into VCF 9 / VKS is genuinely unknown. |
 | `LOW` | Reconstructed or inferred. Assume it is wrong until proven otherwise. |
 
+**Coverage.** 97 rows · **25 implemented** (26%) · 27 uncovered but actionable ·
+45 blocked on confirmation. Of the 27 actionable, 11 need no new infrastructure
+at all. Per-row detail is in each section's summary table; see
+[Status keys](#status-keys).
+
 **Flags.** `⚑` marks a row that must be confirmed before any check is built on
-it. **46 of 91 rows are flagged.** Concentrations of doubt, worst first:
+it. **49 of 97 rows are flagged.** Concentrations of doubt, worst first:
 
 1. **Every VPC row (`VPC-*`)** — VCF 9 VPC-based Supervisor networking is the
    single least-reliable section. The object *names* may be wrong, not just the
@@ -40,8 +45,10 @@ it. **46 of 91 rows are flagged.** Concentrations of doubt, worst first:
    constant, not a product requirement.
 3. **The port matrix (`COM-FW-*`)** — deliberately *not* enumerated. See
    `COM-FW-007`.
-4. **HAProxy (`LB-HAP-*`)** — believed removed in the VCF 9 generation. The
-   whole topology may be moot.
+4. **HAProxy (`LB-HAP-*`)** — the topology is not moot: operator-confirmed as
+   being phased out starting with vCenter 9.x, fully supported on 8.x (see
+   `LB-HAP-000`, now implemented). The Data Plane API rows (`LB-HAP-001`
+   through `004`) remain flagged/unimplemented on their own separate merits.
 5. **Version-compatibility rows (`COM-VER-*`, `LB-ALB-002`)** — these depend on
    an external interoperability matrix that changes independently of any release
    and must never be hardcoded.
@@ -49,6 +56,17 @@ it. **46 of 91 rows are flagged.** Concentrations of doubt, worst first:
 **What a flag does NOT mean.** An unflagged row is not verified — it is merely
 one where the failure mode of being wrong is low (a generic networking fact). No
 row in this file has been confirmed against a product document.
+
+**Exception: the Foundation Load Balancer section (`LB-FLB-*`).** Unlike the
+rest of this matrix, that section's high-level facts (deployment model, the
+two-arm/one-arm/one-arm-one-nic network topologies, HA modes, sizing, vCenter
+9.0+ requirement) were confirmed against a fetched Broadcom TechDocs page
+("Architecture of vSphere Supervisor with Foundation Load Balancer" and its
+"Requirements" sibling), not reconstructed from model knowledge. That raises
+confidence on *what FLB is*, but implementation-level detail this tool would
+need to actually check it — the vCenter object model exposed for FLB VMs, the
+config signal for "Simplified Supervisor", and FLB's VIP allocation mechanism —
+was not covered by that page and remains flagged below like everything else.
 
 **Contradiction with the brief, flagged rather than silently resolved.** The
 brief listed four topologies; the original README listed four *different* ones,
@@ -69,7 +87,8 @@ names in their **Topologies** field. The mapping is:
 | `nsx` | `networking=nsx`, `loadBalancer=nsx-lb` |
 | `nsx-alb` | `networking=nsx`, `loadBalancer=alb` |
 | `vds-alb` | `networking=vds`, `loadBalancer=alb` |
-| `vds-haproxy` ⚑ | `networking=vds`, `loadBalancer=haproxy` *(believed removed in VCF 9)* |
+| `vds-haproxy` | `networking=vds`, `loadBalancer=haproxy` *(fully supported on vCenter 8.x; being phased out on 9.x — see `LB-HAP-000`)* |
+| `vds-flb` | `networking=vds`, `loadBalancer=flb` *(new in VCF 9.1; see below)* |
 | `nsx-vpc` ⚑ | `networking=nsx-vpc`, either load balancer *(lowest confidence section)* |
 | `all` | every combination |
 
@@ -94,7 +113,54 @@ or bites later) · `info` (recorded, never gates).
 
 ---
 
+## Status keys
+
+Each section opens with a generated summary table. The **Status** column says
+what this build actually does about the row — this is the backlog, and it lives
+next to the requirement rather than in a file that can drift from it.
+
+| Status | Meaning |
+|---|---|
+| ✅ `check.id` | Implemented. The named check evidences this row. |
+| `ready` | Requirement is settled and nothing new is needed — only the work. Cheapest coverage available. |
+| `vantage` | Buildable, but only meaningful when run from a specific segment. **Writing these as ordinary local probes produces a false green** — see [CHECK-TAXONOMY.md](CHECK-TAXONOMY.md). Decide the vantage story first. |
+| `NSX client` / `ALB client` / `HAProxy API` | Blocked on a management-plane client that does not exist yet. `internal/clients/{nsx,alb}` are stubs. |
+| `raw socket` / `invasive probe` | Blocked on a probe capability that does not exist. Raw sockets need privilege degradation designed first — unprivileged is the *normal* field case. |
+| `confirm first` | Row is flagged ⚑. Cannot be built from this repository; needs product docs or a lab. |
+
+**Do not read `confirm first` as "not done yet".** Those rows are not waiting on
+engineering time — half this matrix is unconfirmed, and that, not implementation
+capacity, is the binding constraint on coverage.
+
+### A ⚑ row may still be implemented
+
+Four implemented rows are flagged, which looks like it contradicts
+[ADR-0008](ADR/0008-requirements-matrix-authority.md) rule 3 and does not. In
+each case the check **parameterises the uncertain dimension instead of asserting
+it**: `COM-NTP-002`'s tolerance comes from config rather than a number this tool
+invented, `COM-DNS-002` defers severity to `services.dns.requireReverse`,
+`COM-DNS-005` stays a warning exactly as its flag instructs, and `COM-API-001`
+checks only the tool's own access and says so.
+
+The rule that actually applies: *a row flagged on a dimension the check does not
+assert is not blocked by that flag.* A row flagged on **the thing the check would
+assert** stays blocked — and that is the common case, so the test to apply is
+"name the doubt, then name what the check claims", not "find a way to argue past
+the flag". Settled in
+[ADR-0015](ADR/0015-flagged-rows-and-version-constants.md).
+
+---
+
 # Meta
+
+<!-- BEGIN GENERATED SUMMARY -->
+
+| ID | Requirement | Severity | ⚑ | Status |
+|---|---|---|---|---|
+| `MET-001` | Declared topology is supported by this build | blocker |  | ✅ `meta.topology-recognised` |
+
+*1 of 1 implemented.*
+<!-- END GENERATED SUMMARY -->
 
 #### `MET-001` · Declared topology is supported by this build
 **Topologies** all · **Category** meta · **Severity** blocker · **Confidence** HIGH · **Flag** —
@@ -106,6 +172,19 @@ or bites later) · `info` (recorded, never gates).
 ---
 
 # Common — DNS
+
+<!-- BEGIN GENERATED SUMMARY -->
+
+| ID | Requirement | Severity | ⚑ | Status |
+|---|---|---|---|---|
+| `COM-DNS-001` | Forward resolution for every management endpoint | blocker |  | ✅ `dns.forward` |
+| `COM-DNS-002` | Reverse (PTR) resolution agrees with forward | blocker | ⚑ | ✅ `dns.reverse` |
+| `COM-DNS-003` | Declared resolvers answer from the relevant segments | blocker |  | vantage |
+| `COM-DNS-004` | Supervisor control plane name resolves | warning | ⚑ | confirm first |
+| `COM-DNS-005` | Resolvers agree with each other | warning | ⚑ | ✅ `dns.resolver-agreement` |
+
+*3 of 5 implemented.*
+<!-- END GENERATED SUMMARY -->
 
 #### `COM-DNS-001` · Forward resolution for every management endpoint
 **Topologies** all · **Category** dns · **Severity** blocker · **Confidence** HIGH · **Flag** —
@@ -149,6 +228,19 @@ or bites later) · `info` (recorded, never gates).
 
 # Common — NTP and time
 
+<!-- BEGIN GENERATED SUMMARY -->
+
+| ID | Requirement | Severity | ⚑ | Status |
+|---|---|---|---|---|
+| `COM-NTP-001` | Declared NTP sources are reachable and answer | blocker |  | ✅ `ntp.reachable` |
+| `COM-NTP-002` | Clock skew is within tolerance | blocker | ⚑ | ✅ `ntp.skew` |
+| `COM-NTP-003` | ESXi hosts have NTP configured and running | blocker | ⚑ | confirm first |
+| `COM-NTP-004` | vCenter appliance is time-synced | blocker | ⚑ | confirm first |
+| `COM-NTP-005` | NSX Manager is time-synced | blocker | ⚑ | confirm first |
+
+*2 of 5 implemented.*
+<!-- END GENERATED SUMMARY -->
+
 #### `COM-NTP-001` · Declared NTP sources are reachable and answer
 **Topologies** all · **Category** ntp · **Severity** blocker · **Confidence** HIGH · **Flag** —
 - **Expected:** Each declared NTP server answers an SNTP query on 123/udp.
@@ -191,6 +283,21 @@ or bites later) · `info` (recorded, never gates).
 ---
 
 # Common — firewall and ports
+
+<!-- BEGIN GENERATED SUMMARY -->
+
+| ID | Requirement | Severity | ⚑ | Status |
+|---|---|---|---|---|
+| `COM-FW-001` | vCenter management port reachable | blocker |  | ✅ `tcp.port-open` |
+| `COM-FW-002` | NSX Manager management port reachable | blocker |  | ✅ `tcp.port-open` |
+| `COM-FW-003` | ESXi host management ports reachable | blocker | ⚑ | confirm first |
+| `COM-FW-004` | Supervisor API endpoint path is open | blocker | ⚑ | confirm first |
+| `COM-FW-005` | Image registry reachable from the workload network | blocker | ⚑ | confirm first |
+| `COM-FW-006` | Declared egress proxy is reachable and consistent | warning | ⚑ | confirm first |
+| `COM-FW-007` | Full inter-component port matrix | blocker | ⚑ | confirm first |
+
+*2 of 7 implemented.*
+<!-- END GENERATED SUMMARY -->
 
 #### `COM-FW-001` · vCenter management port reachable
 **Topologies** all · **Category** firewall · **Severity** blocker · **Confidence** HIGH · **Flag** —
@@ -250,6 +357,18 @@ or bites later) · `info` (recorded, never gates).
 
 # Common — certificates
 
+<!-- BEGIN GENERATED SUMMARY -->
+
+| ID | Requirement | Severity | ⚑ | Status |
+|---|---|---|---|---|
+| `COM-CRT-001` | vCenter certificate chain validates | blocker |  | ✅ `tls.chain` |
+| `COM-CRT-002` | NSX Manager certificate chain validates | blocker |  | ✅ `tls.chain` |
+| `COM-CRT-003` | No certificate expires inside the deployment window | warning |  | ✅ `tls.expiry` |
+| `COM-CRT-004` | Private CA is trusted where one is used | blocker | ⚑ | confirm first |
+
+*3 of 4 implemented.*
+<!-- END GENERATED SUMMARY -->
+
 #### `COM-CRT-001` · vCenter certificate chain validates
 **Topologies** all · **Category** certs · **Severity** blocker · **Confidence** HIGH · **Flag** —
 - **Expected:** The vCenter TLS chain validates to a trusted root, and the presented SAN covers the FQDN (and IP, if addressed by IP).
@@ -282,6 +401,19 @@ or bites later) · `info` (recorded, never gates).
 ---
 
 # Common — MTU
+
+<!-- BEGIN GENERATED SUMMARY -->
+
+| ID | Requirement | Severity | ⚑ | Status |
+|---|---|---|---|---|
+| `COM-MTU-001` | Underlay MTU meets the overlay minimum | blocker | ⚑ | confirm first |
+| `COM-MTU-002` | Declared segment MTUs are mutually consistent | warning |  | ready |
+| `COM-MTU-003` | VDS MTU meets the requirement | blocker |  | ✅ `vc.vds-mtu` |
+| `COM-MTU-004` | NSX uplink profile MTU is consistent with the VDS | blocker | ⚑ | confirm first |
+| `COM-MTU-005` | Path MTU verified end to end · **INVASIVE** | blocker |  | invasive probe |
+
+*1 of 5 implemented.*
+<!-- END GENERATED SUMMARY -->
 
 #### `COM-MTU-001` · Underlay MTU meets the overlay minimum
 **Topologies** `nsx`, `nsx-alb`, `nsx-vpc` · **Category** mtu · **Severity** blocker · **Confidence** MED ⚑ · **Flag** ⚑
@@ -324,6 +456,20 @@ or bites later) · `info` (recorded, never gates).
 ---
 
 # Common — CIDR and addressing
+
+<!-- BEGIN GENERATED SUMMARY -->
+
+| ID | Requirement | Severity | ⚑ | Status |
+|---|---|---|---|---|
+| `COM-CID-001` | No declared range overlaps another | blocker |  | ✅ `cidr.overlap` |
+| `COM-CID-002` | No declared range collides with existing infrastructure | blocker |  | ✅ `cidr.external-collision` |
+| `COM-CID-003` | Cluster-internal ranges do not collide with reachable infrastructure | blocker |  | ✅ `cidr.infra-collision` |
+| `COM-CID-004` | Ranges meet minimum prefix sizes | blocker | ⚑ | confirm first |
+| `COM-CID-005` | Declared ranges sit inside their own subnet | blocker |  | ✅ `range.containment` |
+| `COM-ADR-001` | Declared static ranges are actually free | blocker | ⚑ | confirm first |
+
+*4 of 6 implemented.*
+<!-- END GENERATED SUMMARY -->
 
 #### `COM-CID-001` · No declared range overlaps another
 **Topologies** all · **Category** cidr · **Severity** blocker · **Confidence** HIGH · **Flag** —
@@ -375,6 +521,17 @@ or bites later) · `info` (recorded, never gates).
 
 # Common — routing and reachability
 
+<!-- BEGIN GENERATED SUMMARY -->
+
+| ID | Requirement | Severity | ⚑ | Status |
+|---|---|---|---|---|
+| `COM-RTE-001` | Declared gateways respond | blocker |  | raw socket |
+| `COM-RTE-002` | Routable ranges are actually routed | blocker |  | vantage |
+| `COM-RTE-003` | No NAT between the Supervisor and the management plane | blocker | ⚑ | confirm first |
+
+*0 of 3 implemented.*
+<!-- END GENERATED SUMMARY -->
+
 #### `COM-RTE-001` · Declared gateways respond
 **Topologies** all · **Category** routing · **Severity** blocker · **Confidence** HIGH · **Flag** —
 - **Expected:** Each declared gateway address is live and is inside its declared subnet.
@@ -400,6 +557,20 @@ or bites later) · `info` (recorded, never gates).
 ---
 
 # Common — management plane API and versions
+
+<!-- BEGIN GENERATED SUMMARY -->
+
+| ID | Requirement | Severity | ⚑ | Status |
+|---|---|---|---|---|
+| `COM-API-001` | vCenter API answers and credentials authenticate | blocker | ⚑ | ✅ `vc.api-reachable` |
+| `COM-API-002` | NSX Manager API answers and credentials authenticate | blocker |  | NSX client |
+| `INV-VC-001` | Declared datacenter and cluster exist | blocker |  | ✅ `vc.cluster-exists` |
+| `INV-VC-002` | Declared distributed switch exists | blocker |  | ✅ `vc.vds-exists` |
+| `COM-VER-001` | vCenter and ESXi versions are supported | blocker | ⚑ | confirm first |
+| `COM-VER-002` | NSX version is supported | blocker | ⚑ | confirm first |
+
+*3 of 6 implemented.*
+<!-- END GENERATED SUMMARY -->
 
 #### `COM-API-001` · vCenter API answers and credentials authenticate
 **Topologies** all · **Category** reachability · **Severity** blocker · **Confidence** HIGH · **Flag** ⚑
@@ -452,6 +623,18 @@ or bites later) · `info` (recorded, never gates).
 
 # Supervisor management network
 
+<!-- BEGIN GENERATED SUMMARY -->
+
+| ID | Requirement | Severity | ⚑ | Status |
+|---|---|---|---|---|
+| `SUP-MGT-001` | Management network has enough consecutive free addresses | blocker | ⚑ | confirm first |
+| `SUP-MGT-002` | Management network reaches the management plane | blocker |  | vantage |
+| `SUP-MGT-003` | Static range does not overlap a DHCP scope | blocker | ⚑ | confirm first |
+| `SUP-MGT-004` | Supervisor API VIP is free and correctly placed | blocker | ⚑ | confirm first |
+
+*0 of 4 implemented.*
+<!-- END GENERATED SUMMARY -->
+
 #### `SUP-MGT-001` · Management network has enough consecutive free addresses
 **Topologies** all · **Category** ippool · **Severity** blocker · **Confidence** MED ⚑ · **Flag** ⚑
 - **Expected:** The declared management range contains the required number of *consecutive* free static addresses.
@@ -486,6 +669,26 @@ or bites later) · `info` (recorded, never gates).
 ---
 
 # NSX topologies (`nsx`, `nsx-alb`)
+
+<!-- BEGIN GENERATED SUMMARY -->
+
+| ID | Requirement | Severity | ⚑ | Status |
+|---|---|---|---|---|
+| `NSX-T0-001` | Tier-0 gateway exists | blocker |  | NSX client |
+| `NSX-T0-002` | Tier-0 has working north-south connectivity | blocker |  | NSX client |
+| `NSX-T0-003` | Tier-0 HA mode and placement are appropriate | warning | ⚑ | confirm first |
+| `NSX-EDG-001` | Edge cluster exists and is healthy | blocker | ⚑ | confirm first |
+| `NSX-TZ-001` | Overlay transport zone covers the cluster | blocker |  | NSX client |
+| `NSX-TZ-002` | Every host in the cluster is prepared for NSX | blocker |  | NSX client |
+| `NSX-ING-001` | Ingress range is routable and unallocated | blocker |  | NSX client |
+| `NSX-ING-002` | Ingress range is large enough | warning | ⚑ | confirm first |
+| `NSX-EGR-001` | Egress range is routable and unallocated | blocker |  | NSX client |
+| `NSX-EGR-002` | Egress range is large enough for the expected namespace count | warning | ⚑ | confirm first |
+| `NSX-POD-001` | Pod / namespace IP block is valid and sized | blocker | ⚑ | confirm first |
+| `NSX-DFW-001` | Distributed firewall does not block Supervisor traffic | warning | ⚑ | confirm first |
+
+*0 of 12 implemented.*
+<!-- END GENERATED SUMMARY -->
 
 #### `NSX-T0-001` · Tier-0 gateway exists
 **Topologies** `nsx`, `nsx-alb` · **Category** inventory · **Severity** blocker · **Confidence** HIGH · **Flag** —
@@ -588,6 +791,21 @@ or bites later) · `info` (recorded, never gates).
 > shape to correct, not a specification. If the reviewer's lab contradicts a row,
 > the lab is right.
 
+<!-- BEGIN GENERATED SUMMARY -->
+
+| ID | Requirement | Severity | ⚑ | Status |
+|---|---|---|---|---|
+| `VPC-CFG-001` | VPC connectivity profile exists | blocker | ⚑ | confirm first |
+| `VPC-CFG-002` | Transit gateway is configured | blocker | ⚑ | confirm first |
+| `VPC-POO-001` | Private IP blocks are defined and sized | blocker | ⚑ | confirm first |
+| `VPC-POO-002` | Public / external IP blocks are defined, routable and sized | blocker | ⚑ | confirm first |
+| `VPC-RTE-001` | VPC external connectivity works | blocker | ⚑ | confirm first |
+| `VPC-MTU-001` | MTU on VPC segments meets the overlay minimum | blocker | ⚑ | confirm first |
+| `VPC-SUP-001` | Supervisor VPC prerequisites are met | blocker | ⚑ | confirm first |
+
+*0 of 7 implemented.*
+<!-- END GENERATED SUMMARY -->
+
 #### `VPC-CFG-001` · VPC connectivity profile exists
 **Topologies** `nsx-vpc` · **Category** inventory · **Severity** blocker · **Confidence** LOW ⚑ · **Flag** ⚑
 - **Expected:** The declared VPC connectivity profile exists and is associated with the project the Supervisor will use.
@@ -648,6 +866,21 @@ or bites later) · `info` (recorded, never gates).
 
 # VDS-based topologies — common (`vds-alb`, `vds-haproxy`)
 
+<!-- BEGIN GENERATED SUMMARY -->
+
+| ID | Requirement | Severity | ⚑ | Status |
+|---|---|---|---|---|
+| `VDS-PG-001` | Management portgroup exists with the declared VLAN | blocker |  | ✅ `vc.portgroup-exists` |
+| `VDS-PG-002` | Workload portgroup(s) exist | blocker |  | ✅ `vc.portgroup-exists` |
+| `VDS-PG-003` | Frontend portgroup exists | blocker |  | ✅ `vc.portgroup-exists` |
+| `VDS-PG-004` | Portgroup security policy permits the load balancer | warning | ⚑ | confirm first |
+| `VDS-WKL-001` | Workload static range is sized for the expected node count | blocker | ⚑ | confirm first |
+| `VDS-WKL-002` | Workload network reaches the management plane | blocker |  | vantage |
+| `VDS-DHCP-001` | Declared DHCP scope is valid where DHCP is used | warning | ⚑ | confirm first |
+
+*3 of 7 implemented.*
+<!-- END GENERATED SUMMARY -->
+
 #### `VDS-PG-001` · Management portgroup exists with the declared VLAN
 **Topologies** `vds-alb`, `vds-haproxy` · **Category** inventory · **Severity** blocker · **Confidence** HIGH · **Flag** —
 - **Expected:** The declared management portgroup exists on the declared VDS and carries the declared VLAN.
@@ -703,6 +936,28 @@ or bites later) · `info` (recorded, never gates).
 ---
 
 # Load balancer — NSX ALB (`vds-alb`, `nsx-alb`)
+
+<!-- BEGIN GENERATED SUMMARY -->
+
+| ID | Requirement | Severity | ⚑ | Status |
+|---|---|---|---|---|
+| `LB-ALB-001` | Controller is reachable and authenticates | blocker |  | ALB client |
+| `LB-ALB-002` | Controller version is compatible | blocker | ⚑ | confirm first |
+| `LB-ALB-003` | Controller cluster is healthy | blocker |  | ALB client |
+| `LB-ALB-004` | License tier supports the required features | blocker | ⚑ | confirm first |
+| `LB-ALB-005` | Cloud is configured and healthy | blocker | ⚑ | confirm first |
+| `LB-ALB-006` | Service Engine group exists with capacity | blocker | ⚑ | confirm first |
+| `LB-ALB-007` | Controller has DNS and NTP configured | warning |  | ALB client |
+| `LB-ALB-008` | Controller is reachable **from the Supervisor management network** | blocker |  | vantage |
+| `LB-VIP-001` | VIP range sits inside its frontend subnet | blocker |  | ✅ `range.containment` |
+| `LB-VIP-002` | VIP range does not overlap other allocations | blocker |  | ready |
+| `LB-VIP-003` | VIP network has an allocatable pool in ALB | blocker |  | ALB client |
+| `LB-VIP-004` | VIP range is not already allocated | blocker |  | ALB client |
+| `LB-VIP-005` | SE data / transit network reaches the workload network | blocker |  | vantage |
+| `LB-VIP-006` | VIP range is large enough | warning | ⚑ | confirm first |
+
+*1 of 14 implemented.*
+<!-- END GENERATED SUMMARY -->
 
 #### `LB-ALB-001` · Controller is reachable and authenticates
 **Topologies** `vds-alb`, `nsx-alb` · **Category** reachability · **Severity** blocker · **Confidence** HIGH · **Flag** —
@@ -767,14 +1022,14 @@ or bites later) · `info` (recorded, never gates).
 - **Note:** this is a separate row from `LB-ALB-001` on purpose. Vantage point is the difference between a preflight that catches this and one that produces a green report and a failed deployment.
 
 #### `LB-VIP-001` · VIP range sits inside its frontend subnet
-**Topologies** `vds-alb`, `nsx-alb` · **Category** cidr · **Severity** blocker · **Confidence** HIGH · **Flag** —
+**Topologies** `vds-alb`, `nsx-alb`, `vds-flb` · **Category** cidr · **Severity** blocker · **Confidence** HIGH · **Flag** —
 - **Expected:** The declared VIP range is contained within the frontend network's CIDR.
 - **From the network:** `cfg`.
 - **Remediation:** Correct the VIP range or the frontend CIDR.
 - **Source:** Arithmetic.
 
 #### `LB-VIP-002` · VIP range does not overlap other allocations
-**Topologies** `vds-alb`, `nsx-alb` · **Category** cidr · **Severity** blocker · **Confidence** HIGH · **Flag** —
+**Topologies** `vds-alb`, `nsx-alb`, `vds-flb` · **Category** cidr · **Severity** blocker · **Confidence** HIGH · **Flag** —
 - **Expected:** The VIP range does not overlap the SE data range, any static node range, or a DHCP scope.
 - **From the network:** `cfg`.
 - **Remediation:** Re-plan the frontend address space.
@@ -794,15 +1049,16 @@ or bites later) · `info` (recorded, never gates).
 - **Remediation:** Choose a free range.
 - **Source:** ALB IPAM configuration.
 
-#### `LB-VIP-005` · SE data network reaches the workload network
-**Topologies** `vds-alb`, `nsx-alb` · **Category** routing · **Severity** blocker · **Confidence** HIGH · **Flag** —
-- **Expected:** The Service Engine data network can route to the workload network where the backend pods and nodes live.
-- **From the network:** `net`, run from the SE data segment.
-- **Remediation:** Fix routing between the SE data and workload segments.
-- **Source:** ALB Service Engine network design.
+#### `LB-VIP-005` · SE data / transit network reaches the workload network
+**Topologies** `vds-alb`, `nsx-alb`, `vds-flb` · **Category** routing · **Severity** blocker · **Confidence** HIGH · **Flag** —
+- **Expected:** The Service Engine data network (ALB) or transit network (FLB two-arm mode) can route to the workload network where the backend pods and nodes live.
+- **From the network:** `net`, run from the SE data / transit segment.
+- **Remediation:** Fix routing between the SE data / transit and workload segments.
+- **Source:** ALB Service Engine network design; FLB architecture (transit network forwards traffic to workload IP pool members).
+- **Note:** for FLB, this row only applies in `two-arm` mode — `one-arm` and `one-arm-one-nic` combine the transit network with the virtual server network, so there is nothing distinct to route.
 
 #### `LB-VIP-006` · VIP range is large enough
-**Topologies** `vds-alb`, `nsx-alb` · **Category** ippool · **Severity** warning · **Confidence** MED · **Flag** ⚑
+**Topologies** `vds-alb`, `nsx-alb`, `vds-flb` · **Category** ippool · **Severity** warning · **Confidence** MED · **Flag** ⚑
 - **Expected:** The VIP range covers the expected load balancer service count plus headroom, plus whatever the Supervisor itself consumes.
 - **From the network:** `cfg`.
 - **Remediation:** Widen the range before enabling.
@@ -813,21 +1069,35 @@ or bites later) · `info` (recorded, never gates).
 
 # Load balancer — HAProxy (`vds-haproxy`)
 
-> **⚑ Whole-section flag.** HAProxy as a Supervisor load balancer is believed to
-> be **deprecated or removed in the VCF 9 generation**. If it is gone, this
-> entire section and the `vds-haproxy` topology should be deleted rather than
-> maintained — carrying a dead topology forward makes the tool look more capable
-> than it is. It is retained for now only because the brief asked for it and
-> because older environments may still need preflighting. **Confirm support
-> status first; that answer makes every other row here moot or not.**
+> **Section status, revised.** Earlier drafts of this section flagged the whole
+> topology as possibly gone in the VCF 9 generation. Operator-confirmed status,
+> corroborating the general direction VMware has signalled for the appliance
+> model: HAProxy is **not removed**, but it **is being phased out starting with
+> the vCenter 9.x generation**, and it remains **fully supported on vCenter
+> 8.x**. `LB-HAP-000` is implemented on that basis and is no longer flagged.
+> Everything below it (the Data Plane API rows) is unaffected by this and stays
+> flagged/unimplemented for its own reasons.
 
-#### `LB-HAP-000` · HAProxy topology is supported at all
-**Topologies** `vds-haproxy` · **Category** inventory · **Severity** blocker · **Confidence** LOW ⚑ · **Flag** ⚑
-- **Expected:** The HAProxy load balancer is a supported choice for the VKS version being deployed.
-- **From the network:** `cfg` against a version-support table.
-- **Remediation:** Migrate to NSX ALB.
-- **Source:** VKS load balancer support statement for the target version.
-- **⚑ Confirm.** This is the row that decides the fate of the section.
+<!-- BEGIN GENERATED SUMMARY -->
+
+| ID | Requirement | Severity | ⚑ | Status |
+|---|---|---|---|---|
+| `LB-HAP-000` | HAProxy support status for the vCenter version in play | warning |  | ✅ `hap.version-supported` |
+| `LB-HAP-001` | Data Plane API is reachable | blocker |  | ready |
+| `LB-HAP-002` | Data Plane API credentials and CA are correct | blocker |  | HAProxy API |
+| `LB-HAP-003` | Configured VIP range matches the declared one | blocker |  | HAProxy API |
+| `LB-HAP-004` | Appliance interfaces are on the right networks | blocker |  | ready |
+
+*1 of 5 implemented.*
+<!-- END GENERATED SUMMARY -->
+
+#### `LB-HAP-000` · HAProxy support status for the vCenter version in play
+**Topologies** `vds-haproxy` · **Category** inventory · **Severity** warning · **Confidence** MED · **Flag** —
+- **Expected:** vCenter is earlier than the 9.x generation, where HAProxy is fully supported. On 9.x it still works but is being phased out — a warning, not a blocker.
+- **From the network:** `api` (vCenter version, already read by `vc.api-reachable`).
+- **Remediation:** Migrate to NSX Advanced Load Balancer or Foundation Load Balancer before upgrading vCenter past the 8.x generation.
+- **Source:** Operator-confirmed (this is not from a fetched product doc — treat the exact version boundary as MED, not HIGH, confidence, same caution as everything else in this file that lacks a citable source).
+- **Implemented by:** `hap.version-supported`, in `internal/checks/alb`.
 
 #### `LB-HAP-001` · Data Plane API is reachable
 **Topologies** `vds-haproxy` · **Category** reachability · **Severity** blocker · **Confidence** MED · **Flag** —
@@ -856,6 +1126,78 @@ or bites later) · `info` (recorded, never gates).
 - **From the network:** `api` (vCenter).
 - **Remediation:** Reattach the interfaces.
 - **Source:** HAProxy-for-Supervisor deployment guidance.
+
+---
+
+# Load balancer — Foundation Load Balancer (`vds-flb`)
+
+> **Provenance note.** This section's high-level facts were confirmed against a
+> fetched Broadcom TechDocs page (see the exception noted at the top of this
+> file), which is why several rows carry higher confidence than the rest of
+> this document's usual default. That page describes intent and topology, not
+> the tool-facing details — vCenter object model, health signals, IPAM
+> mechanism — so most rows are still flagged for those specifics.
+
+<!-- BEGIN GENERATED SUMMARY -->
+
+| ID | Requirement | Severity | ⚑ | Status |
+|---|---|---|---|---|
+| `LB-FLB-000` | vCenter version supports Foundation Load Balancer | blocker |  | ✅ `flb.version-supported` |
+| `LB-FLB-001` | FLB VM(s) are deployed, powered on and correctly placed | blocker | ⚑ | confirm first |
+| `LB-FLB-002` | Declared network topology (arm mode) has its required networks present | blocker |  | ready |
+| `LB-FLB-003` | `one-arm-one-nic` is only declared for a Simplified Supervisor deployment | blocker | ⚑ | confirm first |
+| `LB-FLB-004` | HA mode has its DRS/host-anti-affinity prerequisites | warning | ⚑ | confirm first |
+| `LB-FLB-005` | VIP range is not already allocated | blocker | ⚑ | confirm first |
+
+*1 of 6 implemented.*
+<!-- END GENERATED SUMMARY -->
+
+#### `LB-FLB-000` · vCenter version supports Foundation Load Balancer
+**Topologies** `vds-flb` · **Category** inventory · **Severity** blocker · **Confidence** HIGH · **Flag** —
+- **Expected:** FLB requires vCenter 9.0 or later; it does not exist before that.
+- **From the network:** `api` (vCenter version, already read by `vc.api-reachable`).
+- **Remediation:** Upgrade vCenter, or choose ALB/NSX-LB instead.
+- **Source:** "Requirements for Deploying vSphere Supervisor with Foundation Load Balancer" (Broadcom TechDocs).
+- **Implemented by:** `flb.version-supported`, in `internal/checks/flb`.
+
+#### `LB-FLB-001` · FLB VM(s) are deployed, powered on and correctly placed
+**Topologies** `vds-flb` · **Category** inventory · **Severity** blocker · **Confidence** MED · **Flag** ⚑
+- **Expected:** One FLB VM (single-VM mode) or two (active-passive HA mode) exist, are powered on, and sit in the `Namespaces > <Supervisor Name>` folder and resource pool alongside the Supervisor control plane VMs.
+- **From the network:** `api` (vCenter). No client method exists yet.
+- **Remediation:** Redeploy or power on the FLB VM(s); correct folder/resource pool placement.
+- **Source:** "Architecture of vSphere Supervisor with Foundation Load Balancer".
+- **⚑ Confirm:** the exact vCenter object model exposed for FLB VMs. The fetched page confirms *where* they live, not how this tool should query or distinguish them from other VMs in that resource pool.
+
+#### `LB-FLB-002` · Declared network topology (arm mode) has its required networks present
+**Topologies** `vds-flb` · **Category** inventory · **Severity** blocker · **Confidence** HIGH · **Flag** —
+- **Expected:** `two-arm` declares distinct virtual-server and transit networks plus management; `one-arm` declares a combined virtual-server/transit network plus management; `one-arm-one-nic` declares a single network for everything.
+- **From the network:** `cfg`.
+- **Remediation:** Add the missing network block for the declared mode, or correct the mode.
+- **Source:** "Architecture of vSphere Supervisor with Foundation Load Balancer" (two-arm / one-arm / one-arm-one-nic topologies).
+
+#### `LB-FLB-003` · `one-arm-one-nic` is only declared for a Simplified Supervisor deployment
+**Topologies** `vds-flb` · **Category** inventory · **Severity** blocker · **Confidence** MED · **Flag** ⚑
+- **Expected:** `flb.mode: one-arm-one-nic` is used only when the Supervisor deployment is Simplified.
+- **From the network:** `cfg`.
+- **Remediation:** Choose `two-arm` or `one-arm` for a standard multi-zone Supervisor.
+- **Source:** "Architecture of vSphere Supervisor with Foundation Load Balancer" ("supported only in a Simplified Supervisor deployment").
+- **⚑ Confirm:** the config schema has no field recording "Simplified Supervisor" yet, so this cannot be implemented as written — same class of gap as `SUP-MGT-003` / `VDS-DHCP-001`. Add the field or drop the row.
+
+#### `LB-FLB-004` · HA mode has its DRS/host-anti-affinity prerequisites
+**Topologies** `vds-flb` · **Category** inventory · **Severity** warning · **Confidence** MED · **Flag** ⚑
+- **Expected:** Where `flb.ha: true`, the vSphere cluster has DRS (Fully Automated) and HA enabled, so the soft host anti-affinity rule between the two FLB VMs and leader election can take effect.
+- **From the network:** `api` (vCenter cluster settings) — same surface as the Supervisor cluster-readiness checks.
+- **Remediation:** Enable DRS (Fully Automated) and HA on the cluster before enabling FLB's active-passive mode.
+- **Source:** "Maintaining Foundation Load Balancer" / "Requirements for Deploying vSphere Supervisor with Foundation Load Balancer".
+- **⚑ Confirm:** whether this tool can/should assert the anti-affinity rule itself exists, versus only the cluster preconditions that allow it to be created.
+
+#### `LB-FLB-005` · VIP range is not already allocated
+**Topologies** `vds-flb` · **Category** ippool · **Severity** blocker · **Confidence** LOW · **Flag** ⚑
+- **Expected:** No address in the declared VIP range is already in use on the Virtual Server Network.
+- **From the network:** `net` (`COM-ADR-001`) + `api` if/when FLB exposes an allocation query through vCenter.
+- **Remediation:** Choose a free range.
+- **Source:** inferred from ALB's equivalent row (`LB-VIP-004`); FLB's own VIP allocation/IPAM mechanism is not described in the fetched architecture page.
+- **⚑ Whole-row low confidence:** the fetched documentation does not describe FLB's VIP allocation model at all. Confirm before building on this row.
 
 ---
 

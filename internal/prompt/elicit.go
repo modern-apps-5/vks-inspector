@@ -375,7 +375,8 @@ func elicitTopologySpecific(p *Prompter, cfg *config.Config) error {
 			cfg.HAProxy = &config.HAProxy{}
 		}
 		p.Section("HAProxy")
-		p.Info("%s HAProxy is believed deprecated in the VCF 9 generation (matrix row LB-HAP-000).", flagMark)
+		p.Info("%s HAProxy is fully supported on vCenter 8.x and is being phased out on vCenter 9.x "+
+			"(matrix row LB-HAP-000; hap.version-supported warns rather than blocks).", flagMark)
 		if cfg.HAProxy.Appliance.FQDN == "" {
 			v, err := p.Ask("HAProxy appliance FQDN or address", "haproxy.corp.local", "", normHost)
 			if err != nil {
@@ -390,6 +391,56 @@ func elicitTopologySpecific(p *Prompter, cfg *config.Config) error {
 				return err
 			}
 			cfg.HAProxy.LoadBalancerCIDR = v
+		}
+	}
+
+	if t.UsesFLB() {
+		if cfg.FLB == nil {
+			cfg.FLB = &config.FLB{}
+		}
+		p.Section("Foundation Load Balancer")
+		if cfg.FLB.Mode == "" {
+			v, err := p.Select("FLB network topology", []Choice{
+				{Value: "two-arm", Label: "Two-arm (separate transit and virtual server networks)"},
+				{Value: "one-arm", Label: "One-arm (combined virtual server/transit, separate management)"},
+				{
+					Value: "one-arm-one-nic", Label: "One-arm, one NIC (single interface for everything)",
+					Note: "Simplified Supervisor deployments only",
+				},
+			}, "two-arm")
+			if err != nil {
+				return err
+			}
+			cfg.FLB.Mode = v
+		}
+		if cfg.FLB.VIPNetwork == nil {
+			cidr, err := p.Ask("Virtual Server (VIP) network CIDR", "192.168.100.0/24", "", normStrictCIDR)
+			if err != nil {
+				return err
+			}
+			vip := &config.NetworkSpec{Name: "flb-vip", CIDR: cidr, Routable: true}
+			start, err := p.AskOptional("VIP pool start address", "192.168.100.100", normAddr)
+			if err != nil {
+				return err
+			}
+			if start != "" {
+				end, err := p.Ask("VIP pool end address", "192.168.100.200", "", normAddr)
+				if err != nil {
+					return err
+				}
+				vip.Ranges = []config.IPRange{{Start: start, End: end, Purpose: "load-balancer-vips"}}
+			}
+			cfg.FLB.VIPNetwork = vip
+		}
+		if cfg.FLB.Mode == "two-arm" && cfg.FLB.TransitNetwork == nil {
+			cidr, err := p.Ask("Transit network CIDR (carries traffic to workload IP pool members)",
+				"192.168.101.0/24", "", normStrictCIDR)
+			if err != nil {
+				return err
+			}
+			if cidr != "" {
+				cfg.FLB.TransitNetwork = &config.NetworkSpec{Name: "flb-transit", CIDR: cidr, Routable: true}
+			}
 		}
 	}
 	return nil
