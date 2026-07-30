@@ -274,3 +274,56 @@ func addrBytes(a netip.Addr) []byte {
 	v := a.As16()
 	return v[:]
 }
+
+// Relation describes how two ranges sit relative to each other.
+//
+// "They overlap" is true of all three and useless to act on. Containment and a
+// partial overlap have different causes and different fixes, and an operator
+// reading a report should not have to compare two prefixes in their head to
+// work out which they are looking at.
+type Relation string
+
+const (
+	// RelIdentical — the same range declared twice.
+	RelIdentical Relation = "identical"
+	// RelContains — the first range wholly contains the second.
+	RelContains Relation = "contains"
+	// RelContainedBy — the first range sits wholly inside the second.
+	RelContainedBy Relation = "contained-by"
+	// RelPartial — they intersect without either containing the other.
+	RelPartial Relation = "partial"
+	// RelDisjoint — no shared address.
+	RelDisjoint Relation = "disjoint"
+)
+
+// Relate classifies how two ranges intersect.
+func (r Range) Relate(o Range) Relation {
+	switch {
+	case !r.Overlaps(o):
+		return RelDisjoint
+	case r.Start == o.Start && r.End == o.End:
+		return RelIdentical
+	case r.ContainsRange(o):
+		return RelContains
+	case o.ContainsRange(r):
+		return RelContainedBy
+	default:
+		return RelPartial
+	}
+}
+
+// Describe renders a relation as a phrase that reads in a sentence.
+func (rel Relation) Describe() string {
+	switch rel {
+	case RelIdentical:
+		return "is exactly the same range as"
+	case RelContains:
+		return "wholly contains"
+	case RelContainedBy:
+		return "sits entirely inside"
+	case RelPartial:
+		return "partially overlaps"
+	default:
+		return "does not overlap"
+	}
+}

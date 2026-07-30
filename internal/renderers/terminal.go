@@ -110,8 +110,21 @@ func (t *Terminal) renderResult(bw *errWriter, r results.Result) {
 		// Expected/observed are printed for passes too. A preflight report is
 		// evidence, not just a verdict: "it passed" is far less useful to the
 		// person reading it later than "it passed, and here is what was seen".
-		bw.printf("      expected  %s\n", r.Expected.Summary)
-		bw.printf("      observed  %s\n", r.Observed.Summary)
+		//
+		// On a failure the observation is relabelled "problem" and printed
+		// first. A reader scanning a red block wants the fault, not a restated
+		// requirement they have to diff against it.
+		if r.Status == results.StatusPass {
+			bw.printf("      expected  %s\n", r.Expected.Summary)
+			bw.printf("      observed  %s\n", r.Observed.Summary)
+		} else {
+			bw.printf("      problem   %s\n", wrapIndent(r.Observed.Summary, 16, 78))
+			bw.printf("      expected  %s\n", wrapIndent(r.Expected.Summary, 16, 78))
+		}
+	}
+
+	if r.Status != results.StatusPass && r.Status != results.StatusSkip && r.Impact != "" {
+		bw.printf("      impact    %s\n", wrapIndent(r.Impact, 16, 78))
 	}
 
 	if r.Status != results.StatusPass && r.Status != results.StatusSkip && r.Remediation != "" {

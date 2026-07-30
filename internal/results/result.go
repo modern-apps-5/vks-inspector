@@ -171,6 +171,11 @@ type Result struct {
 	Expected Value `json:"expected"`
 	Observed Value `json:"observed"`
 
+	// Impact is what this finding costs, in plain terms — the consequence of
+	// leaving it. Separate from Remediation because "why it matters" and "what
+	// to do" are different questions, and merging them buried the first.
+	Impact string `json:"impact,omitempty"`
+
 	// Remediation is the operator-facing "what do I do about it". Populated
 	// even on pass, so `explain` and the future UI have something to show.
 	Remediation string `json:"remediation,omitempty"`

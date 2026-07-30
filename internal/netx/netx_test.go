@@ -279,3 +279,45 @@ func indexOf(haystack, needle string) int {
 	}
 	return -1
 }
+
+// "They overlap" is true of every intersecting pair and useless to act on.
+// Containment and a partial overlap have different causes and different fixes.
+func TestRelate(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		a, b string
+		want netx.Relation
+	}{
+		{"identical", "10.0.0.0/24", "10.0.0.0/24", netx.RelIdentical},
+		{"a contains b", "10.0.0.0/16", "10.0.1.0/24", netx.RelContains},
+		{"b contains a", "10.0.1.0/24", "10.0.0.0/16", netx.RelContainedBy},
+		// The reported case: same network address, different prefix length.
+		// A naive check calls this a partial overlap; it is containment.
+		{"same base, shorter prefix contains longer", "10.96.0.0/23", "10.96.0.0/22", netx.RelContainedBy},
+		{"partial", "10.0.0.0-10.0.0.100", "10.0.0.50-10.0.0.200", netx.RelPartial},
+		{"disjoint", "10.0.0.0/24", "10.0.1.0/24", netx.RelDisjoint},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := asRange(t, tt.a).Relate(asRange(t, tt.b))
+			if got != tt.want {
+				t.Errorf("Relate(%s, %s) = %s, want %s", tt.a, tt.b, got, tt.want)
+			}
+			if got.Describe() == "" {
+				t.Error("relation has no description")
+			}
+		})
+	}
+}
+
+func asRange(t *testing.T, s string) netx.Range {
+	t.Helper()
+	if i := indexOf(s, "-"); i >= 0 {
+		return mustRange(t, s[:i], s[i+1:])
+	}
+	return netx.RangeOfPrefix(mustPrefix(t, s))
+}

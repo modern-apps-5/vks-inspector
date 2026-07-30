@@ -3,6 +3,7 @@ package configval
 import (
 	"context"
 	"fmt"
+	"unicode"
 
 	"github.com/modern-apps-5/vks-inspector/internal/checks"
 	"github.com/modern-apps-5/vks-inspector/internal/netx"
@@ -72,21 +73,7 @@ func (c Overlap) Run(ctx context.Context, rc *checks.RunContext) ([]results.Resu
 			if !nets[i].Overlaps(nets[j]) {
 				continue
 			}
-			r := checks.NewResult(c.Meta(), rc, nets[i].Source+" vs "+nets[j].Source)
-			r.Status = results.StatusFail
-			r.Expected = results.Value{
-				Summary: sprintf("%s and %s are disjoint", nets[i], nets[j]),
-			}
-			r.Observed = results.Value{
-				Summary: sprintf("%s overlaps %s", nets[i].Describe(), nets[j].Describe()),
-				Data: map[string]any{
-					"a":        nets[i].String(),
-					"a_source": nets[i].Source,
-					"b":        nets[j].String(),
-					"b_source": nets[j].Source,
-					"overlap":  intersectionString(nets[i], nets[j]),
-				},
-			}
+			r := overlapFinding(c.Meta(), rc, nets[i], nets[j])
 			checks.Finish(rc, &r)
 			found = append(found, r)
 		}
@@ -109,6 +96,120 @@ func (c Overlap) Run(ctx context.Context, rc *checks.RunContext) ([]results.Resu
 	}
 	checks.Finish(rc, &r)
 	return append(out, r), nil
+}
+
+// overlapFinding builds the result for one colliding pair.
+//
+// The message has to answer three questions in the order an operator asks them:
+// what exactly is wrong, what does it cost me, and what do I change. The
+// previous version answered none of them — it restated the rule ("no two
+// declared ranges overlap"), then restated the two prefixes, then said
+// "re-plan the address space".
+func overlapFinding(m checks.Meta, rc *checks.RunContext, a, b netx.Named) results.Result {
+	ra, _ := a.AsRange()
+	rb, _ := b.AsRange()
+	rel := ra.Relate(rb)
+
+	// Order the pair so the sentence reads "the smaller sits inside the
+	// larger", which is how people describe it.
+	first, second, phrase := a, b, rel.Describe()
+	if rel == netx.RelContains {
+		first, second, phrase = b, a, netx.RelContainedBy.Describe()
+	}
+
+	r := checks.NewResult(m, rc, first.Source+" vs "+second.Source)
+	r.Status = results.StatusFail
+
+	// The title names the actual fault. A heading that restates the rule makes
+	// the reader diff it against the observation to find out what happened.
+	r.Title = capitalise(fmt.Sprintf("%s %s %s", displayName(first), phrase, displayName(second)))
+
+	overlap := intersectionString(a, b)
+	size := ""
+	if i, ok := ra.Intersection(rb); ok {
+		size = fmt.Sprintf(" — %d addresses", i.CountInt())
+	}
+
+	r.Expected = results.Value{
+		Summary: fmt.Sprintf("%s and %s share no addresses", first, second),
+		Data:    map[string]any{"relation": string(netx.RelDisjoint)},
+	}
+	r.Observed = results.Value{
+		Summary: fmt.Sprintf("%s (%s) %s %s (%s); overlapping range %s%s",
+			first.Source, first, phrase, second.Source, second, overlap, size),
+		Data: map[string]any{
+			"a":        first.String(),
+			"a_source": first.Source,
+			"b":        second.String(),
+			"b_source": second.Source,
+			"relation": string(rel),
+			"overlap":  overlap,
+		},
+	}
+	r.Impact = overlapImpact(first, second)
+	r.Remediation = overlapFix(first, second)
+
+	checks.Finish(rc, &r)
+	return r
+}
+
+// displayName prefers the human label over the config path.
+func displayName(n netx.Named) string {
+	switch n.Label {
+	case "":
+		return n.Source
+	case "pod":
+		return "the pod CIDR"
+	case "service":
+		return "the Kubernetes service CIDR"
+	case "ingress":
+		return "the ingress CIDR"
+	case "egress":
+		return "the egress CIDR"
+	default:
+		return "the " + n.Label + " network"
+	}
+}
+
+// overlapImpact states the consequence in terms of what stops working, not in
+// terms of the rule that was broken.
+func overlapImpact(a, b netx.Named) string {
+	clusterInternal := func(n netx.Named) bool { return n.Label == "pod" || n.Label == "service" }
+
+	switch {
+	case clusterInternal(a) != clusterInternal(b):
+		return "Addresses in a pod or service CIDR are claimed by the cluster and only exist " +
+			"inside it. Any real host in the overlapping range becomes unreachable from pods — " +
+			"traffic to it is captured by cluster routing instead of leaving the node. The " +
+			"symptom appears long after enablement and points nowhere near the address plan."
+	case clusterInternal(a) && clusterInternal(b):
+		return "The pod and service ranges must be distinct. Sharing addresses makes pod and " +
+			"service traffic ambiguous, and the Supervisor will refuse to enable or will behave " +
+			"unpredictably if it does."
+	default:
+		return "Traffic to an address in the overlapping range can be delivered to either " +
+			"network. Which one wins depends on route ordering, so the fault moves between " +
+			"reboots and looks intermittent."
+	}
+}
+
+// overlapFix says which range to change and why that one.
+func overlapFix(a, b netx.Named) string {
+	movable := func(n netx.Named) bool { return n.Label == "pod" || n.Label == "service" }
+
+	base := "Change one of the two so they share no addresses. "
+	switch {
+	case movable(a) && !movable(b):
+		base += fmt.Sprintf("%s is cluster-internal and does not need to be routable, so it is "+
+			"usually the easier of the two to move.", capitalise(displayName(a)))
+	case movable(b) && !movable(a):
+		base += fmt.Sprintf("%s is cluster-internal and does not need to be routable, so it is "+
+			"usually the easier of the two to move.", capitalise(displayName(b)))
+	default:
+		base += "Pick ranges from separate blocks rather than carving them from the same one."
+	}
+	return base + " Do it before enablement: neither can be changed afterwards without " +
+		"rebuilding the Supervisor."
 }
 
 // ExternalCollision asserts that no declared range collides with infrastructure
@@ -351,6 +452,24 @@ func malformedResults(m checks.Meta, rc *checks.RunContext, bad []badEntry) []re
 		out = append(out, r)
 	}
 	return out
+}
+
+// capitalise upper-cases the first letter so a generated title reads as a
+// sentence rather than a fragment.
+func capitalise(s string) string {
+	if s == "" {
+		return s
+	}
+	r := []rune(s)
+	r[0] = unicode.ToUpper(r[0])
+	return string(r)
+}
+
+func orAddr(name, fallback string) string {
+	if name != "" {
+		return name
+	}
+	return fallback
 }
 
 func intersectionString(a, b netx.Named) string {

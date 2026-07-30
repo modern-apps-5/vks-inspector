@@ -2,6 +2,7 @@ package configval_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -366,4 +367,86 @@ func TestResultsAreDiffable(t *testing.T) {
 			}
 		}
 	}
+}
+
+// A failure heading must state the fault, not restate the rule. "No two
+// declared ranges overlap" forced the reader to diff the heading against the
+// observation to work out what had happened.
+func TestOverlapFindingNamesTheFaultAndItsCost(t *testing.T) {
+	t.Parallel()
+
+	cfg := base()
+	// The reported case: a workload network sitting inside the service CIDR.
+	cfg.Networks.Workload = []config.NetworkSpec{{Name: "workload-primary", CIDR: "10.96.0.0/23", Routable: true}}
+	cfg.Kubernetes.ServiceCIDR = "10.96.0.0/22"
+	cfg.Kubernetes.PodCIDRs = []string{"100.96.0.0/16"}
+
+	res, err := configval.Overlap{}.Run(context.Background(), rc(cfg))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var found *results.Result
+	for i := range res {
+		if res[i].Status == results.StatusFail {
+			found = &res[i]
+		}
+	}
+	if found == nil {
+		t.Fatal("the overlap was not reported")
+	}
+
+	// The heading describes what happened.
+	if !strings.Contains(found.Title, "sits entirely inside") {
+		t.Errorf("title does not name the relationship: %q", found.Title)
+	}
+	if found.Title[0] < 'A' || found.Title[0] > 'Z' {
+		t.Errorf("title should read as a sentence: %q", found.Title)
+	}
+
+	// Containment, not a bare "overlaps".
+	if found.Observed.Data["relation"] != "contained-by" {
+		t.Errorf("relation = %v, want contained-by", found.Observed.Data["relation"])
+	}
+	// The extent is stated, so the reader need not compute it.
+	if !strings.Contains(found.Observed.Summary, "512 addresses") {
+		t.Errorf("observation omits the overlap size: %s", found.Observed.Summary)
+	}
+	// Why it matters is separate from what to do.
+	if found.Impact == "" {
+		t.Error("no impact stated — the reader is left to infer the consequence")
+	}
+	if !strings.Contains(found.Remediation, "cluster-internal") {
+		t.Errorf("remediation does not say which range is easier to move: %s", found.Remediation)
+	}
+}
+
+// Two routable networks colliding is a different failure from a cluster-internal
+// range swallowing a real one, and deserves a different explanation.
+func TestOverlapImpactDependsOnWhatCollided(t *testing.T) {
+	t.Parallel()
+
+	cfg := base()
+	cfg.Networks.Workload = []config.NetworkSpec{
+		{Name: "a", CIDR: "10.20.0.0/16", Routable: true},
+		{Name: "b", CIDR: "10.20.1.0/24", Routable: true},
+	}
+
+	res, err := configval.Overlap{}.Run(context.Background(), rc(cfg))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range res {
+		if r.Status != results.StatusFail {
+			continue
+		}
+		if strings.Contains(r.Impact, "claimed by the cluster") {
+			t.Errorf("two routable networks got the cluster-internal explanation: %s", r.Impact)
+		}
+		if !strings.Contains(r.Impact, "either network") {
+			t.Errorf("impact does not describe ambiguous delivery: %s", r.Impact)
+		}
+		return
+	}
+	t.Fatal("no overlap reported between two workload networks")
 }

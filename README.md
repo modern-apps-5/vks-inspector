@@ -357,11 +357,18 @@ vksinspect  b040440
   probes    read-only (non-invasive)       laptop is not a pass from the
                                            management segment.
 
-BLOCK No two declared ranges overlap  [kubernetes.podCIDRs[0] vs networks.workload[0]]
+BLOCK The workload-primary network sits entirely inside the Kubernetes service CIDR
       check     cidr.overlap  (COM-CID-001)     ← matrix row; `explain` it
-      expected  10.244.0.0/20 and 10.20.0.0/16 are disjoint
-      observed  10.244.0.0/20 overlaps 10.20.0.0/16
-      fix       Re-plan the pod CIDR...
+      problem   networks.workload[0].cidr (10.96.0.0/23) sits entirely inside
+                kubernetes.serviceCIDR (10.96.0.0/22); overlapping range
+                10.96.0.0-10.96.1.255 — 512 addresses
+      expected  10.96.0.0/23 and 10.96.0.0/22 share no addresses
+      impact    Addresses in a pod or service CIDR are claimed by the cluster
+                and only exist inside it. Any real host in the overlapping
+                range becomes unreachable from pods...
+      fix       Change one of the two so they share no addresses. The
+                Kubernetes service CIDR is cluster-internal and does not need
+                to be routable, so it is usually the easier to move...
 
 checks    13 ran of 18 in this build — 5 config-only, 8 network probe(s), 0 API check(s)
           no vcenter access — 4 check(s) could not run, so nothing above covers it
@@ -370,6 +377,16 @@ summary  18 checks: 7 passed, 1 failed, 9 skipped, 1 indeterminate, 0 errors
          1 blocker(s) must be fixed before deployment
          exit code 1 (one or more blockers failed)
 ```
+
+Each finding answers three questions in the order you ask them:
+
+| Line | Answers |
+|---|---|
+| heading | **What is wrong** — the fault, not the rule that was broken |
+| `problem` | **Exactly what was seen**, with config paths and the extent |
+| `expected` | What would have been acceptable |
+| `impact` | **What it costs you** if left alone |
+| `fix` | **What to change**, and which side is easier to move |
 
 Status labels:
 

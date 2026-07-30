@@ -144,6 +144,25 @@ unverified), `docs/CHECK-TAXONOMY.md`, `docs/test-coverage.md`, and 14 ADRs.
   CIDR inside a range it also declared as must-not-collide, so the shipped
   example failed its own checks.
 
+### Changed
+
+- **Failure messages state the fault, not the rule.** A blocker headed "No two
+  declared ranges overlap" made the reader diff the heading against the
+  observation to find out what had happened. Headings are now generated from
+  the finding — "The workload-primary network sits entirely inside the
+  Kubernetes service CIDR".
+- **Overlaps are classified.** Containment, partial overlap and an identical
+  range have different causes and different fixes; reporting all three as
+  "overlaps" left the reader to compare prefixes in their head. The finding now
+  names the relationship and the extent, in addresses.
+- **Results carry an `impact`**, separate from `remediation`. "Why it matters"
+  and "what to do" are different questions, and merging them buried the first.
+  The consequence is stated in terms of what stops working, and differs by what
+  collided — a cluster-internal range swallowing a real host is not the same
+  failure as two routable networks colliding.
+- **Remediation names which side to move** and why that one, rather than saying
+  "re-plan the address space".
+
 ### Fixed
 
 - **`--insecure-skip-tls-verify` never reached the checks.** It was applied only
