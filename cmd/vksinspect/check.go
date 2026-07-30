@@ -31,17 +31,17 @@ import (
 func newCheckCmd(g *globalOpts) *cobra.Command {
 	return &cobra.Command{
 		Use:   "check",
-		Short: "Preflight validation of an environment before Supervisor enablement",
+		Short: "Check an environment before enabling the Supervisor",
 		Long: `Check whether an environment is ready. Give it a vCenter endpoint and it will
-ask what it needs to know, interrogate vCenter, and report.
+ask for what it needs, read what it can from vCenter, and report.
 
   vksinspect check --vcenter vcenter.corp.local
-  vksinspect check --config lab01.yaml            # non-interactive, for pipelines
+  vksinspect check --config lab01.yaml            # asks nothing, for pipelines
 
-Most of what is checked are Supervisor enablement prerequisites — there is no
-VKS without a Supervisor. Use --layer to narrow.
+Most of what it checks is what the Supervisor needs — there is no VKS without a
+Supervisor. Use --layer to narrow that.
 
-Read-only. Non-invasive unless --invasive is given.`,
+Read-only, and it disturbs nothing unless you pass --invasive.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runMode(cmd, g, checks.ModePreflight)
@@ -62,8 +62,8 @@ func runMode(cmd *cobra.Command, g *globalOpts, mode checks.Mode) error {
 	}
 	// Apply --insecure-skip-tls-verify to the set the CHECKS see, not just to
 	// the copy handed to the client. Without this the certificate checks never
-	// learn that verification was disabled and go on asserting a chain nobody
-	// verified.
+	// learn that verification was disabled and go on vouching for a chain
+	// nobody verified.
 	if g.insecureTLS {
 		credSet.SetInsecureAll()
 	}

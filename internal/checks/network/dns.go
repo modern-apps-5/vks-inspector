@@ -79,7 +79,7 @@ func (c Forward) Run(ctx context.Context, rc *checks.RunContext) ([]results.Resu
 				Data:    map[string]any{"resolved": nil, "timeout": true},
 			}
 			r.Remediation = "The resolver did not answer at all. Confirm it is reachable on 53/udp " +
-				"from this vantage point before treating the record as missing."
+				"from the machine you ran this on before treating the record as missing."
 		case ans.Err != nil:
 			r.Status = results.StatusFail
 			r.Observed = results.Value{

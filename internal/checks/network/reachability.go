@@ -31,8 +31,9 @@ func (PortOpen) Meta() checks.Meta {
 		Severity:       results.SeverityBlocker,
 		Modes:          checks.AllModes,
 		Needs:          []checks.Capability{checks.CapNetwork},
-		Remediation: "Open the path from this vantage point to the endpoint. Note the report records " +
-			"which host probed: a pass from a jump host says nothing about the management segment.",
+		Remediation: "Open the path from the machine you ran this on to the endpoint. Note that the " +
+			"report records which host did the probing: a pass from a jump host says nothing about " +
+			"the management network.",
 	}
 }
 
@@ -76,7 +77,7 @@ func (c PortOpen) Run(ctx context.Context, rc *checks.RunContext) ([]results.Res
 			r.Status = results.StatusUnknown
 			r.Observed.Summary = ep.Address() + " did not answer — filtered, not refused"
 			r.Remediation = "A silent drop is a firewall, not a dead service. Confirm the path from " +
-				"this vantage point before treating it as a failure."
+				"the machine you ran this on before treating it as a failure."
 		default:
 			r.Status = results.StatusUnknown
 			r.Observed.Summary = fmt.Sprintf("could not probe %s: %v", ep.Address(), ans.Err)
@@ -146,13 +147,13 @@ func (c NTPReachable) Run(ctx context.Context, rc *checks.RunContext) ([]results
 
 		switch {
 		case ans.Err != nil:
-			// UDP gives no refusal, so a non-answer is indeterminate: the
-			// server may be there behind a filter.
+			// UDP never refuses, so silence tells us nothing: the server may
+			// be there behind a filter.
 			r.Status = results.StatusUnknown
 			r.Observed.Summary = fmt.Sprintf("%s did not answer: %v", s, ans.Err)
 			r.Observed.Data["error"] = ans.Err.Error()
-			r.Remediation = "UDP gives no refusal, so silence cannot distinguish a blocked path from " +
-				"a dead service. Confirm 123/udp is open from this vantage point."
+			r.Remediation = "UDP never refuses, so silence cannot tell a blocked path from a dead " +
+				"service. Confirm 123/udp is open from the machine you ran this on."
 		case ans.Stratum == 0 || ans.Stratum >= 16:
 			// The server answered but is not itself synchronised, so its time
 			// is worthless. A check that only asked "did it answer" would pass.

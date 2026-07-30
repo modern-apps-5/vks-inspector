@@ -25,7 +25,7 @@ func sprintf(format string, args ...any) string { return fmt.Sprintf(format, arg
 // and a single result saying "3 overlaps" cannot be triaged, cannot be
 // individually severity-overridden, and cannot be diffed by drift when one of
 // the three is fixed. The passing case collapses to one row because "47 pairs
-// were disjoint" is not 47 findings.
+// did not overlap" is not 47 findings.
 // ---------------------------------------------------------------------------
 
 // Overlap asserts that no two declared ranges intersect.
@@ -47,7 +47,7 @@ func (Overlap) Meta() checks.Meta {
 		Layer:          results.LayerSupervisor,
 		Severity:       results.SeverityBlocker,
 		Modes:          checks.AllModes,
-		Remediation: "Re-plan the address space so the ranges are disjoint. Overlapping ranges route " +
+		Remediation: "Re-plan the address space so the ranges share no addresses. Overlapping ranges route " +
 			"unpredictably and cannot be corrected after Supervisor enablement without rebuilding it.",
 	}
 }

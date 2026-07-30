@@ -4,22 +4,22 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// newSnapshotCmd captures the current state as a baseline artifact.
+// newSnapshotCmd saves the current state as a baseline file.
 //
-// Stubbed in phase 1. The artifact format already exists and is already
-// produced: a baseline is a results.Report with Kind=vksinspect.baseline/v1,
-// written by results.WriteBaseline. So `snapshot` is `check` with Mode=snapshot
-// and a different serialiser — not a new subsystem.
+// Stubbed in phase 1. The file format already exists and is already produced: a
+// baseline is a results.Report with Kind=vksinspect.baseline/v1, written by
+// results.WriteBaseline. So `snapshot` is `check` with Mode=snapshot and a
+// different writer, not a new subsystem.
 func newSnapshotCmd(g *globalOpts) *cobra.Command {
 	var out string
 
 	cmd := &cobra.Command{
 		Use:   "snapshot",
-		Short: "Capture current state as a baseline artifact (phase 3)",
-		Long: `Capture the current observed state as a baseline artifact that a later
-` + "`drift`" + ` run can diff against.
+		Short: "Save the current state as a baseline file (phase 3)",
+		Long: `Save the current state as a baseline file that a later
+` + "`drift`" + ` run can compare against.
 
-Not implemented in phase 1. The artifact format is already fixed — see
+Not built yet. The file format is already settled — see
 internal/results/baseline.go and docs/ADR/0009-baseline-artifact.md.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -37,6 +37,6 @@ internal/results/baseline.go and docs/ADR/0009-baseline-artifact.md.`,
 					"the writer already exists in internal/results/baseline.go.")
 		},
 	}
-	cmd.Flags().StringVar(&out, "out", "baseline.json", "path to write the baseline artifact")
+	cmd.Flags().StringVar(&out, "out", "baseline.json", "path to write the baseline file")
 	return cmd
 }

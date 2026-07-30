@@ -6,8 +6,8 @@
       <system-out>expected: API responds to /about&#xA;observed: check did not complete&#xA;</system-out>
     </testcase>
     <testcase name="No declared range overlaps another" classname="vksinspect.cidr.cidr.overlap" time="0.001">
-      <failure message="10.244.0.0/20 overlaps 10.244.0.0/16" type="blocker">expected: 10.244.0.0/20 and 10.20.0.0/16 are disjoint&#xA;observed: 10.244.0.0/20 overlaps 10.244.0.0/16&#xA;remediation: Re-plan the pod CIDR so it does not intersect the workload network. Overlapping ranges will route unpredictably and cannot be fixed after deployment without rebuilding the Supervisor.</failure>
-      <system-out>expected: 10.244.0.0/20 and 10.20.0.0/16 are disjoint&#xA;observed: 10.244.0.0/20 overlaps 10.244.0.0/16&#xA;</system-out>
+      <failure message="10.244.0.0/20 overlaps 10.244.0.0/16" type="blocker">expected: 10.244.0.0/20 and 10.20.0.0/16 share no addresses&#xA;observed: 10.244.0.0/20 overlaps 10.244.0.0/16&#xA;remediation: Re-plan the pod CIDR so it does not intersect the workload network. Overlapping ranges will route unpredictably and cannot be fixed after deployment without rebuilding the Supervisor.</failure>
+      <system-out>expected: 10.244.0.0/20 and 10.20.0.0/16 share no addresses&#xA;observed: 10.244.0.0/20 overlaps 10.244.0.0/16&#xA;</system-out>
     </testcase>
     <testcase name="Clock offset is within policy" classname="vksinspect.ntp.ntp.skew" time="0.12">
       <failure message="offset 47s" type="warning">expected: offset within 30s&#xA;observed: offset 47s&#xA;remediation: Point the host and the declared NTP sources at the same stratum.</failure>

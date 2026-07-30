@@ -22,8 +22,8 @@ func newExplainCmd(g *globalOpts) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "explain [check-id | requirement-id | topology]",
 		Short: "Explain why a requirement exists and how to satisfy it",
-		Long: `Explain a check or requirement: what it asserts, which requirement rows it
-traces to, which topologies it applies to, and what to do when it fails.
+		Long: `Explain a check or requirement: what it checks, which requirement rows it
+comes from, which topologies it applies to, and what to do when it fails.
 
 With no argument, lists everything this build knows about.`,
 		Args: cobra.MaximumNArgs(1),
@@ -45,7 +45,7 @@ With no argument, lists everything this build knows about.`,
 					fmt.Fprintf(os.Stdout, "  %-28s %-8s %s\n", m.ID, m.Severity, m.Title)
 				}
 				fmt.Fprintf(os.Stdout,
-					"\nMost requirements have no check yet. The authoritative list is\ndocs/REQUIREMENTS-MATRIX.md.\n")
+					"\nMost requirements have no check yet. The full list is\ndocs/REQUIREMENTS-MATRIX.md.\n")
 				return nil
 			}
 
@@ -68,7 +68,7 @@ With no argument, lists everything this build knows about.`,
 					fmt.Fprintf(os.Stdout, "  invasive      yes — requires --invasive\n")
 				}
 				if m.Remediation != "" {
-					fmt.Fprintf(os.Stdout, "\n  remediation\n    %s\n", m.Remediation)
+					fmt.Fprintf(os.Stdout, "\n  how to fix it\n    %s\n", m.Remediation)
 				}
 				fmt.Fprintln(os.Stdout)
 			}
@@ -79,8 +79,8 @@ With no argument, lists everything this build knows about.`,
 				// (a YAML sidecar, embedded with go:embed) rather than the
 				// markdown table it is today. Deliberately not done yet: the
 				// matrix rows are still being confirmed against product docs
-				// and a lab, and embedding unverified content would give it an
-				// authority it has not earned.
+				// and a lab, and shipping unconfirmed content inside the binary
+				// would make it look more settled than it is.
 				return fmt.Errorf("nothing known about %q in this build; see docs/REQUIREMENTS-MATRIX.md", args[0])
 			}
 			return nil
