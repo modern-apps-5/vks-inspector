@@ -57,13 +57,13 @@ var blockedBy = map[string]string{
 
 	// Buildable, but only meaningful from a specific segment. Writing these as
 	// ordinary local probes would produce exactly the false green that
-	// CHECK-TAXONOMY.md calls this tool's likeliest failure mode.
-	"COM-DNS-003": "vantage",
-	"COM-RTE-002": "vantage",
-	"SUP-MGT-002": "vantage",
-	"VDS-WKL-002": "vantage",
-	"LB-ALB-008":  "vantage",
-	"LB-VIP-005":  "vantage",
+	// check-types.md calls this tool's likeliest failure mode.
+	"COM-DNS-003": "run location",
+	"COM-RTE-002": "run location",
+	"SUP-MGT-002": "run location",
+	"VDS-WKL-002": "run location",
+	"LB-ALB-008":  "run location",
+	"LB-VIP-005":  "run location",
 
 	// Blocked on a probe capability that does not exist.
 	"COM-RTE-001": "raw socket",

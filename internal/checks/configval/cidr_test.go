@@ -339,7 +339,7 @@ func TestAllChecksAreWellFormed(t *testing.T) {
 				t.Error("no layer")
 			}
 			if len(m.Needs) != 0 {
-				t.Errorf("class (c) checks need no capabilities, got %v", m.Needs)
+				t.Errorf("config checks need no access, got %v", m.Needs)
 			}
 		})
 	}

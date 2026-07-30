@@ -16,9 +16,9 @@ genuinely VKS-cluster-layer requirements are a much smaller set: TKr and content
 library availability, workload node address sizing, per-cluster load balancer
 service consumption.
 
-Conflating them produces a report that answers neither question cleanly. They
-are also asked at different times, often by different people: Supervisor
-enablement is a one-off platform activity, VKS cluster provisioning is ongoing.
+Mixing the two produces a report that answers neither question cleanly. They are
+also asked at different times, usually by different people: enabling the
+Supervisor is a one-off platform job, provisioning VKS clusters is ongoing.
 
 ## Decision
 
@@ -49,13 +49,14 @@ would otherwise exit 0 and read as a clean bill of health.
 - The README and matrix now say plainly that this is mostly a Supervisor
   readiness checker. That is a more accurate description of the product than its
   name suggests, and saying so is better than letting the name mislead.
-- **Cost:** every matrix row needs a layer tag. The rows have not all been
-  tagged yet — the field exists and the checks use it, but the markdown matrix
-  has not been re-annotated. Listed as debt in
+- **Cost:** every matrix row needs a layer tag. They have not all been tagged
+  yet — the field exists and the checks use it, but the markdown matrix has not
+  been updated. Listed as a known gap in
   [CONTRIBUTING.md](../CONTRIBUTING.md).
-- **Cost:** `both` is doing double duty as "applies at both layers" and as the
-  filter value meaning "run everything". It reads naturally in both positions
-  and a separate `all` value seemed like ceremony, but it is a slight conflation.
+- **Cost:** `both` means two things: "applies at both layers", and "run
+  everything" when used as a filter. It reads naturally either way, and a
+  separate `all` value felt like extra machinery for little gain, but the two
+  meanings are not quite the same.
 - **Unresolved:** whether the tool should refuse `--layer vks` in preflight
   mode. A VKS-layer check before the Supervisor exists is arguably meaningless.
   Currently allowed, and such checks will mostly skip on their own.

@@ -10,11 +10,12 @@ manager, a virtualenv or an internet connection can be assumed. Frequently the
 environment is a hardened bastion where installing anything at all requires a
 change request.
 
-Later phases add an embedded web UI, which means the artifact must be able to
-carry static assets.
+Later phases add a built-in web UI, which means whatever we ship has to be able
+to carry static assets along with it.
 
-Python was the obvious alternative and was considered. It loses on the only
-axis that matters here: distribution. Shipping a Python tool into a customer's
+Python was the obvious alternative and was considered. It loses on the only thing
+that matters here: getting the tool onto the machine. Shipping a Python tool into
+a customer's
 locked-down bastion means shipping an interpreter, a dependency tree, and a
 support burden for whichever of those the customer's hardening breaks. PyInstaller
 and friends move the problem rather than solving it.
@@ -34,10 +35,10 @@ windows/amd64 — the platforms a field engineer actually has.
 - Go's standard library covers DNS, TCP, TLS and HTTP without third-party
   packages, which keeps the dependency surface small in a tool that will be
   security-reviewed by customers.
-- **Cost:** raw sockets for ICMP and ARP need privilege the tool often will not
-  have. This is not a Go problem, but Go gives us no way around it either. The
-  degradation path — report a skip with a reason, never a silent pass — is a
-  design requirement rather than an afterthought. See ADR-0007.
+- **Cost:** raw sockets for ICMP and ARP need access the tool often will not
+  have. That is not a Go problem, but Go gives us no way round it either. What
+  happens instead — report a skip with a reason, never a quiet pass — is part of
+  the design rather than an afterthought. See ADR-0007.
 - **Cost:** the vSphere and NSX SDK ecosystem in Go is real but thinner than
   Python's `pyvmomi`. Some API surfaces will be hand-rolled REST clients.
 - **Cost:** contributors who know Python and not Go are excluded from

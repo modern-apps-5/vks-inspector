@@ -1,4 +1,4 @@
-# ADR-0013 — Prompting produces a config; it is not an alternative to one
+# ADR-0013 — Prompting produces a config, it is not an alternative to one
 
 **Status:** Accepted · **Date:** 2026-07-29
 

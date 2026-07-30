@@ -21,9 +21,9 @@ consumes a lease.
 write is the session-open call, and the session must be explicitly closed so the
 tool does not litter a customer's vCenter with sessions.
 
-This is enforced by convention and review, not by the type system. It is stated
-loudly in the package docs, in the taxonomy, and here, because that is the only
-enforcement available.
+Nothing in the type system enforces this — only convention and review do. That
+is why it is stated loudly in the package docs, in
+[check-types.md](../check-types.md), and here.
 
 **Anything potentially disruptive is gated.** A check sets `Meta.Invasive` and
 declares `CapInvasive`. Without `--invasive` (or `policy.allowInvasive`), the
@@ -32,11 +32,11 @@ able to mistake "not run" for "passed".
 
 Every invasive check is documented as such in the requirements matrix.
 
-**Privilege degradation is a design requirement, not error handling.** Raw
-sockets for ICMP and ARP need root or `CAP_NET_RAW`. An unprivileged field
-engineer on a customer laptop is the *normal* case. Where privilege is
-unavailable: report a skip with the reason, fall back to a weaker probe where
-one exists, never fail hard, never silently pass.
+**Running without root is part of the design, not an error case.** Raw sockets
+for ICMP and ARP need root or `CAP_NET_RAW`. A field engineer on a customer
+laptop with neither is the *normal* case. When the tool cannot get that access:
+report a skip with the reason, fall back to a weaker probe if one exists, never
+fail hard, and never quietly pass.
 
 ## Consequences
 

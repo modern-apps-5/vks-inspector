@@ -1,84 +1,85 @@
 # VKS networking requirements matrix
 
-The authoritative list of networking prerequisites this tool grades against.
-Every check in the codebase must cite one or more IDs from this file; a check
-that traces to nothing here is not allowed to ship.
+The master list of networking prerequisites this tool grades against. Every
+check in the codebase has to name one or more IDs from this file. A check that
+points at nothing here does not ship.
 
 ---
 
 ## Read this before you trust a single row
 
-**Provenance.** This matrix was written from model knowledge with a May 2026
-training cutoff. **No product documentation was fetched while writing it.** That
-is a deliberate consequence of how it was commissioned — the reviewer confirms
-rows against product docs and a lab — but it means the correct default posture
-toward any row is suspicion, not trust.
+**Where this list came from.** It was written from model knowledge with a May
+2026 training cutoff. **No product documentation was read while writing it.**
+That was deliberate given how the work was commissioned — the reviewer confirms
+rows against the product docs and a lab — but it means you should start by
+doubting every row, not trusting it.
 
-**No URLs are cited, on purpose.** Fabricated documentation links are worse than
-absent ones: they look authoritative and cost a reviewer real time to disprove.
-The `Source` field names the *document area to look in*, not a URL. Treat every
-one as "go and find this", not "this was read".
+**There are no URLs here, on purpose.** A made-up documentation link is worse
+than no link: it looks official and costs a reviewer real time to disprove. The
+`Source` field names the *part of the documentation to go and look in*, not a
+URL. Read every one as "go find this", not "this was read".
 
 **Confidence levels.**
 
 | Level | Meaning |
 |---|---|
-| `HIGH` | Generic networking fact, or a VMware behaviour stable across many releases. Still worth a spot-check; unlikely to be wrong. |
-| `MED` | Believed correct for the TKGS / vSphere-with-Tanzu generation. Whether it survived unchanged into VCF 9 / VKS is genuinely unknown. |
-| `LOW` | Reconstructed or inferred. Assume it is wrong until proven otherwise. |
+| `HIGH` | A general networking fact, or VMware behaviour that has been stable across many releases. Still worth spot-checking, but unlikely to be wrong. |
+| `MED` | Believed correct for TKGS / vSphere with Tanzu. Whether it carried over unchanged into VCF 9 / VKS is genuinely unknown. |
+| `LOW` | Pieced together or inferred. Assume it is wrong until someone proves otherwise. |
 
-**Coverage.** 97 rows · **25 implemented** (26%) · 27 uncovered but actionable ·
-45 blocked on confirmation. Of the 27 actionable, 11 need no new infrastructure
-at all. Per-row detail is in each section's summary table; see
+**Coverage.** 97 rows · **25 done** (26%) · 27 not done but buildable now ·
+45 waiting on someone confirming the requirement. Of the 27 buildable, 11 need
+nothing new built first. Per-row detail is in each section's summary table; see
 [Status keys](#status-keys).
 
-**Flags.** `⚑` marks a row that must be confirmed before any check is built on
-it. **49 of 97 rows are flagged.** Concentrations of doubt, worst first:
+**Flags.** `⚑` marks a row that has to be confirmed before any check is built on
+it. **49 of the 97 rows are flagged.** Where the doubt is concentrated, worst
+first:
 
 1. **Every VPC row (`VPC-*`)** — VCF 9 VPC-based Supervisor networking is the
-   single least-reliable section. The object *names* may be wrong, not just the
-   values. Do not implement anything here from this document.
-2. **Every numeric threshold** — MTU minimums, "5 consecutive IPs", clock-skew
-   tolerance, minimum prefix sizes, pool-sizing ratios. Numbers are exactly what
-   changes between releases and exactly what this document is least able to
-   supply. Where a number appears without a flag, it is a generic networking
-   constant, not a product requirement.
-3. **The port matrix (`COM-FW-*`)** — deliberately *not* enumerated. See
+   least reliable section here. Even the object *names* may be wrong, never mind
+   the values. Do not build anything from this document for VPC.
+2. **Every number** — MTU minimums, "5 consecutive IPs", clock-skew tolerance,
+   minimum prefix sizes, pool-sizing ratios. Numbers are exactly what changes
+   between releases and exactly what this document is least able to get right.
+   Where a number appears without a flag, it is a general networking constant
+   rather than a product requirement.
+3. **The port list (`COM-FW-*`)** — deliberately *not* written out. See
    `COM-FW-007`.
-4. **HAProxy (`LB-HAP-*`)** — the topology is not moot: operator-confirmed as
-   being phased out starting with vCenter 9.x, fully supported on 8.x (see
-   `LB-HAP-000`, now implemented). The Data Plane API rows (`LB-HAP-001`
-   through `004`) remain flagged/unimplemented on their own separate merits.
+4. **HAProxy (`LB-HAP-*`)** — the topology still matters. An operator confirmed
+   it is fully supported on vCenter 8.x and being phased out starting with 9.x
+   (see `LB-HAP-000`, now implemented). The Data Plane API rows (`LB-HAP-001`
+   through `004`) are still flagged and unbuilt, for their own separate reasons.
 5. **Version-compatibility rows (`COM-VER-*`, `LB-ALB-002`)** — these depend on
-   an external interoperability matrix that changes independently of any release
-   and must never be hardcoded.
+   an external interoperability matrix that changes on its own schedule, and it
+   must never be hardcoded here.
 
-**What a flag does NOT mean.** An unflagged row is not verified — it is merely
-one where the failure mode of being wrong is low (a generic networking fact). No
-row in this file has been confirmed against a product document.
+**What a flag does NOT mean.** A row without a flag has not been verified. It is
+just one where being wrong costs little, because it is a general networking
+fact. No row in this file has been confirmed against a product document.
 
-**Exception: the Foundation Load Balancer section (`LB-FLB-*`).** Unlike the
-rest of this matrix, that section's high-level facts (deployment model, the
-two-arm/one-arm/one-arm-one-nic network topologies, HA modes, sizing, vCenter
-9.0+ requirement) were confirmed against a fetched Broadcom TechDocs page
-("Architecture of vSphere Supervisor with Foundation Load Balancer" and its
-"Requirements" sibling), not reconstructed from model knowledge. That raises
-confidence on *what FLB is*, but implementation-level detail this tool would
-need to actually check it — the vCenter object model exposed for FLB VMs, the
-config signal for "Simplified Supervisor", and FLB's VIP allocation mechanism —
-was not covered by that page and remains flagged below like everything else.
+**One exception: the Foundation Load Balancer section (`LB-FLB-*`).** Unlike the
+rest of this matrix, that section's high-level facts — the deployment model, the
+two-arm / one-arm / one-arm-one-nic network layouts, HA modes, sizing, and the
+vCenter 9.0+ requirement — came from a Broadcom TechDocs page that was actually
+read ("Architecture of vSphere Supervisor with Foundation Load Balancer" and its
+"Requirements" sibling), rather than from model knowledge. That makes *what FLB
+is* more reliable. It does not help with the detail this tool would need to
+check FLB properly: which vCenter objects FLB VMs appear as, what in the config
+says "Simplified Supervisor", and how FLB allocates VIPs. That page did not
+cover any of it, so those rows stay flagged like everything else.
 
-**Contradiction with the brief, flagged rather than silently resolved.** The
-brief listed four topologies; the original README listed four *different* ones,
-including `NSX + AVI`, which the brief omitted. This matrix covers the **union**.
-`NSX + ALB` is a real supported shape and dropping it because the brief did not
-name it would be a silent scope decision.
+**The brief and the README disagreed, and this file keeps both.** The brief
+listed four topologies. The original README listed four *different* ones,
+including `NSX + AVI`, which the brief left out. This matrix covers all of them.
+`NSX + ALB` is a real supported combination, and dropping it just because the
+brief did not mention it would be a scope decision made quietly.
 
 ---
 
 ## Topology keys
 
-The code models topology as two orthogonal axes
+The code models topology as two separate settings
 ([ADR-0011](ADR/0011-topology-axes.md)); the rows below still use the older flat
 names in their **Topologies** field. The mapping is:
 
@@ -92,61 +93,61 @@ names in their **Topologies** field. The mapping is:
 | `nsx-vpc` ⚑ | `networking=nsx-vpc`, either load balancer *(lowest confidence section)* |
 | `all` | every combination |
 
-**⚑ Docs debt:** re-expressing every row in terms of axes is outstanding. Where a
-row says "nsx, nsx-alb" it almost always means "networking=nsx, any load
-balancer", and a row saying "vds-alb, vds-haproxy" almost always means
-"networking=vds". Worth doing when the rows are confirmed, since many will change
-anyway.
+**⚑ Still to do:** rewriting every row in terms of the two settings. Where a row
+says "nsx, nsx-alb" it almost always means "networking=nsx, any load balancer",
+and a row saying "vds-alb, vds-haproxy" almost always means "networking=vds".
+Worth doing once the rows are confirmed, since many will change anyway.
 
-## Verifiability keys
+## How each row can be checked
 
 | Key | Meaning |
 |---|---|
-| `net` | Verifiable from a host on the network with no credentials — taxonomy class (a) |
-| `api` | Requires vCenter / NSX / ALB API credentials — class (b) |
-| `cfg` | Pure arithmetic on the declared config, no I/O — class (c) |
-| `net+api` | Needs both to be answered properly; usually `net` gives a partial answer |
-| `INVASIVE` | Sends traffic that may disturb the network; gated behind `--invasive` |
+| `net` | Checkable from a host on the network, no credentials — a network check |
+| `api` | Needs vCenter / NSX / ALB credentials — an API check |
+| `cfg` | Pure arithmetic on the declared config, nothing contacted — a config check |
+| `net+api` | Needs both for a full answer; `net` alone usually gives a partial one |
+| `INVASIVE` | Sends traffic that may disturb the network; needs `--invasive` |
 
-Severity: `blocker` (deployment fails or is unsupported) · `warning` (degrades
-or bites later) · `info` (recorded, never gates).
+Severity: `blocker` (the deployment fails or is unsupported) · `warning` (works,
+but degrades or bites later) · `info` (recorded, never gates anything).
 
 ---
 
 ## Status keys
 
 Each section opens with a generated summary table. The **Status** column says
-what this build actually does about the row — this is the backlog, and it lives
-next to the requirement rather than in a file that can drift from it.
+what this build actually does about the row. That is the backlog, and it lives
+next to the requirement rather than in a separate file that would fall out of
+date.
 
 | Status | Meaning |
 |---|---|
-| ✅ `check.id` | Implemented. The named check evidences this row. |
-| `ready` | Requirement is settled and nothing new is needed — only the work. Cheapest coverage available. |
-| `vantage` | Buildable, but only meaningful when run from a specific segment. **Writing these as ordinary local probes produces a false green** — see [CHECK-TAXONOMY.md](CHECK-TAXONOMY.md). Decide the vantage story first. |
-| `NSX client` / `ALB client` / `HAProxy API` | Blocked on a management-plane client that does not exist yet. `internal/clients/{nsx,alb}` are stubs. |
-| `raw socket` / `invasive probe` | Blocked on a probe capability that does not exist. Raw sockets need privilege degradation designed first — unprivileged is the *normal* field case. |
-| `confirm first` | Row is flagged ⚑. Cannot be built from this repository; needs product docs or a lab. |
+| ✅ `check.id` | Done. The named check covers this row. |
+| `ready` | The requirement is settled and nothing new is needed — just the work. The cheapest coverage available. |
+| `run location` | Buildable, but only means anything when run from a specific network. **Writing these as ordinary local probes produces a false green** — see [check-types.md](check-types.md). Decide where they should run first. |
+| `NSX client` / `ALB client` / `HAProxy API` | Waiting on a client that does not exist yet. `internal/clients/{nsx,alb}` are stubs. |
+| `raw socket` / `invasive probe` | Waiting on a kind of probe the tool cannot do yet. Raw sockets need a plan for running without root first — no root is the *normal* case in the field. |
+| `confirm first` | The row is flagged ⚑. It cannot be built from this repository; it needs product docs or a lab. |
 
-**Do not read `confirm first` as "not done yet".** Those rows are not waiting on
-engineering time — half this matrix is unconfirmed, and that, not implementation
-capacity, is the binding constraint on coverage.
+**`confirm first` does not mean "not done yet".** Those rows are not waiting on
+engineering time. Half this matrix is unconfirmed, and that — not how much code
+anyone can write — is what limits coverage.
 
 ### A ⚑ row may still be implemented
 
-Four implemented rows are flagged, which looks like it contradicts
-[ADR-0008](ADR/0008-requirements-matrix-authority.md) rule 3 and does not. In
-each case the check **parameterises the uncertain dimension instead of asserting
-it**: `COM-NTP-002`'s tolerance comes from config rather than a number this tool
-invented, `COM-DNS-002` defers severity to `services.dns.requireReverse`,
-`COM-DNS-005` stays a warning exactly as its flag instructs, and `COM-API-001`
-checks only the tool's own access and says so.
+Four rows that are done are also flagged. That looks like it breaks
+[ADR-0008](ADR/0008-requirements-matrix-authority.md) rule 3, and it does not. In
+each case the check **takes the uncertain part from you instead of deciding it**:
+`COM-NTP-002` gets its tolerance from your config rather than a number this tool
+invented, `COM-DNS-002` takes its severity from `services.dns.requireReverse`,
+`COM-DNS-005` stays a warning exactly as its flag says it should, and
+`COM-API-001` only checks the tool's own access and says so.
 
-The rule that actually applies: *a row flagged on a dimension the check does not
-assert is not blocked by that flag.* A row flagged on **the thing the check would
-assert** stays blocked — and that is the common case, so the test to apply is
-"name the doubt, then name what the check claims", not "find a way to argue past
-the flag". Settled in
+So the rule is: *if a row is flagged over something the check does not claim,
+that flag does not block it.* If the row is flagged over **the very thing the
+check would claim**, it stays blocked — and that is the usual case. The test is
+"say what the doubt is, then say what the check claims", not "find a way to argue
+past the flag". Settled in
 [ADR-0015](ADR/0015-flagged-rows-and-version-constants.md).
 
 ---
@@ -179,7 +180,7 @@ the flag". Settled in
 |---|---|---|---|---|
 | `COM-DNS-001` | Forward resolution for every management endpoint | blocker |  | ✅ `dns.forward` |
 | `COM-DNS-002` | Reverse (PTR) resolution agrees with forward | blocker | ⚑ | ✅ `dns.reverse` |
-| `COM-DNS-003` | Declared resolvers answer from the relevant segments | blocker |  | vantage |
+| `COM-DNS-003` | Declared resolvers answer from the relevant segments | blocker |  | run location |
 | `COM-DNS-004` | Supervisor control plane name resolves | warning | ⚑ | confirm first |
 | `COM-DNS-005` | Resolvers agree with each other | warning | ⚑ | ✅ `dns.resolver-agreement` |
 
@@ -204,7 +205,7 @@ the flag". Settled in
 #### `COM-DNS-003` · Declared resolvers answer from the relevant segments
 **Topologies** all · **Category** dns · **Severity** blocker · **Confidence** HIGH · **Flag** —
 - **Expected:** Each declared DNS server answers on 53/udp and 53/tcp from the management segment and from each workload segment.
-- **From the network:** `net` — must be run from a host on each segment; a pass from the jump host says nothing about the workload network. The report records the vantage point for exactly this reason.
+- **From the network:** `net` — has to be run from a host on each segment. A pass from the jump host says nothing about the workload network, which is exactly why the report records which host the probes ran from.
 - **Remediation:** Open 53/udp+tcp, or place a resolver reachable from each segment.
 - **Source:** Generic. Also implied by Supervisor networking prerequisites.
 
@@ -254,7 +255,7 @@ the flag". Settled in
 - **From the network:** `net` for source offset; `api` for vCenter and host clocks.
 - **Remediation:** Point every component at the same stratum. Certificate validation and Kubernetes token handling both fail in confusing ways when clocks disagree.
 - **Source:** Unknown.
-- **⚑ Confirm:** **The threshold is the problem.** The previous test-coverage document asserted 30 seconds. No documented product threshold is known to this document, and 30s appears to be a field heuristic. It is configurable rather than hardcoded so the tool does not present an unsourced number as a product requirement. Confirm whether a documented tolerance exists; if not, keep it configurable and say so in the output.
+- **⚑ Confirm:** **The threshold is the problem.** The previous test-coverage document stated 30 seconds as fact. No documented product threshold is known to this document, and 30s appears to be a field heuristic. It is configurable rather than hardcoded so the tool does not present an unsourced number as a product requirement. Confirm whether a documented tolerance exists; if not, keep it configurable and say so in the output.
 
 #### `COM-NTP-003` · ESXi hosts have NTP configured and running
 **Topologies** all · **Category** ntp · **Severity** blocker · **Confidence** MED · **Flag** ⚑
@@ -302,7 +303,7 @@ the flag". Settled in
 #### `COM-FW-001` · vCenter management port reachable
 **Topologies** all · **Category** firewall · **Severity** blocker · **Confidence** HIGH · **Flag** —
 - **Expected:** TCP 443 to vCenter accepts a connection from the management segment.
-- **From the network:** `net` — tri-state. "Refused" proves reachability with nothing listening; a silent drop proves nothing and must report as indeterminate, never as a failure.
+- **From the network:** `net` — three outcomes. "Refused" proves the host is reachable with nothing listening; silence proves nothing and must be reported as unknown, never as a failure.
 - **Remediation:** Open TCP 443 from the management segment to vCenter.
 - **Source:** VMware Ports and Protocols for the exact VCF/VKS version.
 
@@ -421,7 +422,7 @@ the flag". Settled in
 - **From the network:** `net` + `INVASIVE` for true path verification; `api` for configured values.
 - **Remediation:** Raise MTU on the physical underlay, the VDS and the NSX uplink profile together. Raising one and not the others produces intermittent, size-dependent failures that look like application bugs.
 - **Source:** NSX installation prerequisites, transport network MTU requirements.
-- **⚑ Confirm the number.** 1600 is the long-standing Geneve minimum and 9000 is commonly recommended in practice, but the VCF 9 requirement is not confirmed here. `nsx.overlayMTU` is configurable so the tool asserts the site's declared value rather than a number this document invented.
+- **⚑ Confirm the number.** 1600 is the long-standing Geneve minimum and 9000 is commonly recommended in practice, but the VCF 9 requirement is not confirmed here. `nsx.overlayMTU` is configurable, so the tool checks against the value the site declared rather than a number this document invented.
 
 #### `COM-MTU-002` · Declared segment MTUs are mutually consistent
 **Topologies** all · **Category** mtu · **Severity** warning · **Confidence** HIGH · **Flag** —
@@ -526,7 +527,7 @@ the flag". Settled in
 | ID | Requirement | Severity | ⚑ | Status |
 |---|---|---|---|---|
 | `COM-RTE-001` | Declared gateways respond | blocker |  | raw socket |
-| `COM-RTE-002` | Routable ranges are actually routed | blocker |  | vantage |
+| `COM-RTE-002` | Routable ranges are actually routed | blocker |  | run location |
 | `COM-RTE-003` | No NAT between the Supervisor and the management plane | blocker | ⚑ | confirm first |
 
 *0 of 3 implemented.*
@@ -542,7 +543,7 @@ the flag". Settled in
 #### `COM-RTE-002` · Routable ranges are actually routed
 **Topologies** all · **Category** routing · **Severity** blocker · **Confidence** HIGH · **Flag** —
 - **Expected:** Ranges declared `routable: true` are reachable from outside their own segment and are not blackholed.
-- **From the network:** `net` — and the vantage point is the whole point. A pass from inside the segment says nothing.
+- **From the network:** `net` — and where you run it is the whole point. A pass from inside the segment says nothing.
 - **Remediation:** Advertise or statically route the range.
 - **Source:** Generic; also the ingress/egress advertisement requirements under NSX.
 
@@ -609,7 +610,7 @@ the flag". Settled in
 - **From the network:** `api`.
 - **Remediation:** Upgrade to a supported build.
 - **Source:** Product interoperability matrix.
-- **⚑ Confirm — and note the design constraint:** the interoperability matrix changes independently of any release, so **this must never be hardcoded**. It has to be supplied as data the user can update, or the check must report the observed versions as `info` and let a human judge. Reporting a stale hardcoded matrix as authoritative would be worse than not checking.
+- **⚑ Confirm — and note the design constraint:** the interoperability matrix changes independently of any release, so **this must never be hardcoded**. It has to be supplied as data the user can update, or the check must report the observed versions as `info` and let a human judge. Reporting a stale hardcoded table as if it were current would be worse than not checking at all.
 
 #### `COM-VER-002` · NSX version is supported
 **Topologies** `nsx`, `nsx-alb`, `nsx-vpc` · **Category** inventory · **Severity** blocker · **Confidence** LOW ⚑ · **Flag** ⚑
@@ -628,7 +629,7 @@ the flag". Settled in
 | ID | Requirement | Severity | ⚑ | Status |
 |---|---|---|---|---|
 | `SUP-MGT-001` | Management network has enough consecutive free addresses | blocker | ⚑ | confirm first |
-| `SUP-MGT-002` | Management network reaches the management plane | blocker |  | vantage |
+| `SUP-MGT-002` | Management network reaches the management plane | blocker |  | run location |
 | `SUP-MGT-003` | Static range does not overlap a DHCP scope | blocker | ⚑ | confirm first |
 | `SUP-MGT-004` | Supervisor API VIP is free and correctly placed | blocker | ⚑ | confirm first |
 
@@ -875,7 +876,7 @@ the flag". Settled in
 | `VDS-PG-003` | Frontend portgroup exists | blocker |  | ✅ `vc.portgroup-exists` |
 | `VDS-PG-004` | Portgroup security policy permits the load balancer | warning | ⚑ | confirm first |
 | `VDS-WKL-001` | Workload static range is sized for the expected node count | blocker | ⚑ | confirm first |
-| `VDS-WKL-002` | Workload network reaches the management plane | blocker |  | vantage |
+| `VDS-WKL-002` | Workload network reaches the management plane | blocker |  | run location |
 | `VDS-DHCP-001` | Declared DHCP scope is valid where DHCP is used | warning | ⚑ | confirm first |
 
 *3 of 7 implemented.*
@@ -908,7 +909,7 @@ the flag". Settled in
 - **From the network:** `api`.
 - **Remediation:** Adjust the portgroup security policy.
 - **Source:** ALB / HAProxy deployment guidance for vSphere.
-- **⚑ Confirm what is actually required, per load balancer.** The requirements differ between ALB Service Engines and HAProxy, and enabling promiscuous mode unnecessarily is a real security cost. Do not implement a blanket assertion.
+- **⚑ Confirm what is actually required, per load balancer.** The requirements differ between ALB Service Engines and HAProxy, and enabling promiscuous mode unnecessarily is a real security cost. Do not build a check that claims one blanket answer.
 
 #### `VDS-WKL-001` · Workload static range is sized for the expected node count
 **Topologies** `vds-alb`, `vds-haproxy` · **Category** ippool · **Severity** blocker · **Confidence** MED · **Flag** ⚑
@@ -948,12 +949,12 @@ the flag". Settled in
 | `LB-ALB-005` | Cloud is configured and healthy | blocker | ⚑ | confirm first |
 | `LB-ALB-006` | Service Engine group exists with capacity | blocker | ⚑ | confirm first |
 | `LB-ALB-007` | Controller has DNS and NTP configured | warning |  | ALB client |
-| `LB-ALB-008` | Controller is reachable **from the Supervisor management network** | blocker |  | vantage |
+| `LB-ALB-008` | Controller is reachable **from the Supervisor management network** | blocker |  | run location |
 | `LB-VIP-001` | VIP range sits inside its frontend subnet | blocker |  | ✅ `range.containment` |
 | `LB-VIP-002` | VIP range does not overlap other allocations | blocker |  | ready |
 | `LB-VIP-003` | VIP network has an allocatable pool in ALB | blocker |  | ALB client |
 | `LB-VIP-004` | VIP range is not already allocated | blocker |  | ALB client |
-| `LB-VIP-005` | SE data / transit network reaches the workload network | blocker |  | vantage |
+| `LB-VIP-005` | SE data / transit network reaches the workload network | blocker |  | run location |
 | `LB-VIP-006` | VIP range is large enough | warning | ⚑ | confirm first |
 
 *1 of 14 implemented.*
@@ -996,7 +997,7 @@ the flag". Settled in
 - **From the network:** `api`.
 - **Remediation:** Fix the cloud configuration.
 - **Source:** ALB cloud configuration for vSphere / NSX.
-- **⚑ Confirm:** Which cloud type is required per topology — a vCenter cloud for `vds-alb` versus an NSX-T cloud for `nsx-alb`. Asserting the wrong one produces a confident false blocker.
+- **⚑ Confirm:** Which cloud type is required per topology — a vCenter cloud for `vds-alb` versus an NSX-T cloud for `nsx-alb`. Claiming the wrong one produces a confident, false blocker.
 
 #### `LB-ALB-006` · Service Engine group exists with capacity
 **Topologies** `vds-alb`, `nsx-alb` · **Category** inventory · **Severity** blocker · **Confidence** MED · **Flag** ⚑
@@ -1019,7 +1020,7 @@ the flag". Settled in
 - **From the network:** `net`, run from the management segment.
 - **Remediation:** Open the management-to-controller path.
 - **Source:** Supervisor load balancer configuration prerequisites.
-- **Note:** this is a separate row from `LB-ALB-001` on purpose. Vantage point is the difference between a preflight that catches this and one that produces a green report and a failed deployment.
+- **Note:** this is a separate row from `LB-ALB-001` on purpose. Where the check runs from is the difference between catching this in preflight and producing a green report followed by a failed deployment.
 
 #### `LB-VIP-001` · VIP range sits inside its frontend subnet
 **Topologies** `vds-alb`, `nsx-alb`, `vds-flb` · **Category** cidr · **Severity** blocker · **Confidence** HIGH · **Flag** —
@@ -1131,7 +1132,7 @@ the flag". Settled in
 
 # Load balancer — Foundation Load Balancer (`vds-flb`)
 
-> **Provenance note.** This section's high-level facts were confirmed against a
+> **Where this section came from.** Its high-level facts were confirmed against a
 > fetched Broadcom TechDocs page (see the exception noted at the top of this
 > file), which is why several rows carry higher confidence than the rest of
 > this document's usual default. That page describes intent and topology, not
@@ -1189,7 +1190,7 @@ the flag". Settled in
 - **From the network:** `api` (vCenter cluster settings) — same surface as the Supervisor cluster-readiness checks.
 - **Remediation:** Enable DRS (Fully Automated) and HA on the cluster before enabling FLB's active-passive mode.
 - **Source:** "Maintaining Foundation Load Balancer" / "Requirements for Deploying vSphere Supervisor with Foundation Load Balancer".
-- **⚑ Confirm:** whether this tool can/should assert the anti-affinity rule itself exists, versus only the cluster preconditions that allow it to be created.
+- **⚑ Confirm:** whether this tool can or should claim the anti-affinity rule itself exists, versus only the cluster prerequisites that let it be created.
 
 #### `LB-FLB-005` · VIP range is not already allocated
 **Topologies** `vds-flb` · **Category** ippool · **Severity** blocker · **Confidence** LOW · **Flag** ⚑

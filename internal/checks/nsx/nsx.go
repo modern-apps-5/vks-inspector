@@ -1,5 +1,5 @@
 // Package nsx will hold checks requiring NSX Manager API credentials.
-// Taxonomy class (b) — see docs/CHECK-TAXONOMY.md.
+// An API check — see docs/check-types.md.
 package nsx
 
 import "github.com/modern-apps-5/vks-inspector/internal/checks"
