@@ -24,12 +24,12 @@ func Registry() *registry.Registry {
 
 	// Order of the groups below is documentation only; the registry sorts by ID.
 	var set []checks.Check
-	set = append(set, configval.Checks()...) // class (c) — pure config arithmetic
-	set = append(set, network.Checks()...)   // class (a) — network-only
-	set = append(set, vcenter.Checks()...)   // class (b) — credentialed
-	set = append(set, nsx.Checks()...)       // class (b) — credentialed
-	set = append(set, alb.Checks()...)       // class (b) — credentialed
-	set = append(set, flb.Checks()...)       // class (b) — vCenter-credentialed, no dedicated controller
+	set = append(set, configval.Checks()...) // config checks — pure arithmetic
+	set = append(set, network.Checks()...)   // network checks — no credentials
+	set = append(set, vcenter.Checks()...)   // API checks — credentialed
+	set = append(set, nsx.Checks()...)       // API checks — credentialed
+	set = append(set, alb.Checks()...)       // API checks — credentialed
+	set = append(set, flb.Checks()...)       // API checks — vCenter credentials, no dedicated controller
 
 	// The reference check is told how many checks the build knows about, which
 	// is only knowable here. +1 for itself.

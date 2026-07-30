@@ -7,6 +7,28 @@ This project has not cut a release yet; everything below is unreleased.
 
 ## [Unreleased]
 
+### Changed
+
+**Plain-language pass over the docs and the CLI output.** No behaviour changed
+and no facts changed — only the wording. The `class (a)/(b)/(c)` lettering is
+gone, replaced by names that say what they are: **config checks**, **network
+checks** and **API checks**. `docs/CHECK-TAXONOMY.md` is now
+[`docs/check-types.md`](docs/check-types.md), and every reference to it was
+repointed.
+
+The vocabulary that made the project hard to read went with it: "vantage" is now
+"where it ran from", "assert" is "claim" or "report", "artifact" is "file",
+"indeterminate" is "unknown", "orthogonal axes" are "two settings you choose
+separately", and "contractual" exit codes are simply fixed ones. Report headings
+and the `--help` text follow the same vocabulary — the report label `vantage` is
+now `ran from`, and the summary line counts `unknown` rather than
+`indeterminate`.
+
+**Machine formats are untouched on purpose.** The JSON keys (including
+`run.vantage`), the JUnit `type="indeterminate"` attribute and every Go field
+name are unchanged, so anything already reading the output keeps working. In the
+generated matrix tables, the **Status** value `vantage` is now `run location`.
+
 ### Added
 
 **Command surface** — `check`, `verify`, `snapshot`, `drift`, `explain`,

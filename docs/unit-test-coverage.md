@@ -1,15 +1,16 @@
 # Test coverage
 
-How vks-inspector is tested, and — more importantly — which checks *can* be
-tested without a lab, which need recorded fixtures, and which are honestly
-untestable outside a live environment.
+How vks-inspector is tested and, more to the point, which checks *can* be tested
+without a lab, which need recorded API responses, and which honestly cannot be
+tested outside a live environment.
 
-This document was rewritten against the check taxonomy. The previous version was
-a flat checklist of desired checks with no notion of who can run them, what they
-assert, or how they are verified. That list is not lost: every item in it became
-a requirement row in [REQUIREMENTS-MATRIX.md](REQUIREMENTS-MATRIX.md), which is
-now the authoritative "what do we check" document. **This file is about how we
-know the code works** — a different question, and the reason the two were split.
+This file was rewritten around [the three kinds of check](check-types.md). The
+previous version was a flat checklist of checks we wanted, with nothing about who
+could run them, what they claimed, or how anyone knew they worked. That list is
+not lost — every item in it became a requirement row in
+[REQUIREMENTS-MATRIX.md](REQUIREMENTS-MATRIX.md), which is now the master list of
+what we check. **This file is about how we know the code works**, which is a
+different question, and the reason the two were split.
 
 ---
 
@@ -21,15 +22,15 @@ know the code works** — a different question, and the reason the two were spli
 | **2 — Fixture** | Recorded API responses committed to the repo | Yes, always | `make test` | none |
 | **3 — Integration** | A live vSphere / NSX / ALB lab | **No, never** | `make test-integration` | `integration` |
 
-Tier 3 is excluded from CI by build tag, not by a skip at runtime. A test that
-compiles into the default build and skips itself when it cannot find a lab looks
-like coverage in the test count and provides none. `//go:build integration`
-means it is not there at all unless asked for.
+Tier 3 is kept out of CI by a build tag, not by skipping at runtime. A test that
+compiles into the normal build and skips itself when it cannot find a lab counts
+towards the test total and proves nothing. `//go:build integration` means it is
+not there at all unless you ask for it.
 
-**Coverage percentage is not a goal here.** It would be trivially inflated by
-testing the stub packages. What matters is that every *class (a)* and *class (c)*
-check has real assertions against real logic, and that every *class (b)* check
-has a fixture proving it parses a real API response correctly.
+**A coverage percentage is not the goal.** It would be trivially inflated by
+testing the stub packages. What matters is that every network check and config
+check is tested against real logic, and that every API check has a recorded
+response proving it parses the real thing correctly.
 
 ---
 
@@ -39,44 +40,44 @@ Everything that is arithmetic, parsing, formatting or dispatch.
 
 ### Currently covered
 
-| Area | File | What it pins |
+| Area | File | What it checks |
 |---|---|---|
-| Exit-code contract | `internal/results/exitcode_test.go` | The full precedence table, including the load-bearing case that an *indeterminate blocker* is exit 2, not exit 1 |
+| Exit codes | `internal/results/exitcode_test.go` | The full precedence table, including the case everything else rests on: a blocker that *could not tell* is exit 2, not exit 1 |
 | Result roll-up | `internal/results/exitcode_test.go` | Summary counts per status and severity |
 | Renderer output | `internal/renderers/golden_test.go` | Byte-exact terminal, JSON and JUnit output against golden files |
-| Renderer purity | `internal/renderers/golden_test.go` | Same report renders identically 20 times — no map-order or clock leakage |
+| Renderer stability | `internal/renderers/golden_test.go` | The same report renders identically 20 times — no map ordering or clock values leaking in |
 | JSON completeness | `internal/renderers/golden_test.go` | JSON never omits skipped results whatever the options say |
-| Config loading | `internal/config/load_test.go` | The shipped `config/example.yaml` parses; typo'd keys are rejected, not ignored; digest is content-stable and formatting-insensitive |
+| Config loading | `internal/config/load_test.go` | The example config parses; mistyped keys are rejected rather than ignored; the digest depends on content, not formatting |
 | Credential safety | `internal/creds/creds_test.go` | Redaction under `%v %s %+v %#v %q`; refusal to marshal; env-over-file precedence; refusal to read a 0644 file |
 | Registry selection | `internal/registry/registry_test.go` | Mode, topology, `--only`, `--skip`; every check accounted for; registration guards |
 | Engine behaviour | `internal/engine/engine_test.go` | End-to-end run; every mode; panics and silent checks become tool errors; skips carry reasons; severity overrides recorded |
-| Reference check | `internal/checks/reference/reference_test.go` | Identical behaviour in all three modes; machine-comparable observations; injected clock; unsupported axis combinations rejected |
+| Reference check | `internal/checks/reference/reference_test.go` | Behaves the same in all three modes; observations come out as comparable data; the clock is injected; unsupported topology combinations are rejected |
 | Address arithmetic | `internal/netx/netx_test.go` | Overlap, containment, range sizing — including the off-by-one family: adjacency, single-address touch, /31, /32, IPv4-vs-IPv6, host bits set, IPv6 counts exceeding int64 |
-| Prompt primitives | `internal/prompt/prompt_test.go` | Optional vs required lists; examples in labels; validators normalise and re-prompt; non-interactive errors rather than defaulting; lazy section headings |
-| Answer normalisers | `internal/prompt/elicit_internal_test.go` | Bare address → `/32`; host-bits-set refused with the masked form named; strict-vs-lenient CIDR |
-| Network checks | `internal/checks/network/network_test.go` | All eight, via `probes.Fake`: DNS timeout vs NXDOMAIN, wrong-address resolution, per-resolver querying, PTR case-folding, config-driven severity escalation, TCP tri-state mapping, unsynchronised NTP sources, skew in both directions |
+| Prompts | `internal/prompt/prompt_test.go` | Optional vs required lists; examples shown in labels; validators clean up input and ask again; non-interactive errors instead of guessing; section headings only print when used |
+| Answer cleanup | `internal/prompt/elicit_internal_test.go` | A bare address becomes `/32`; a CIDR with host bits set is refused and the corrected form is named; strict vs lenient CIDR |
+| Network checks | `internal/checks/network/network_test.go` | All eight, via `probes.Fake`: DNS timeout vs NXDOMAIN, resolving to the wrong address, querying each resolver separately, PTR case matching, severity raised by config, the three TCP outcomes, unsynchronised NTP sources, and skew in both directions |
 | vCenter checks | `internal/checks/vcenter/vcenter_test.go` | All five against vcsim, end to end through real SOAP |
-| Address-plan checks | `internal/checks/configval/cidr_test.go` | All four implemented checks: overlap, external collision, infra collision, containment; the fan-out idiom; skip-not-pass when there is nothing to compare |
+| Address-plan checks | `internal/checks/configval/cidr_test.go` | All four checks that exist: overlap, external collision, infra collision, containment. Also one row per problem, and skip rather than pass when there is nothing to compare |
 | FLB version boundary | `internal/checks/flb/flb_test.go` | Blocks below vCenter 9.0, passes at and above; unreachable vCenter and unparseable versions report `unknown` rather than a verdict; applicability is `flb`-only |
-| HAProxy version boundary | `internal/checks/alb/alb_test.go` | Passes on vCenter 8.x, warns on 9.x; **asserts the severity stays `warning`** so a deprecation can never fail a working deployment by itself |
-| Matrix ↔ code agreement | `internal/docs/matrix_test.go` | Every cited requirement ID exists in the matrix; the generated summary tables match the registry. Both guards verified to fire by deliberately breaking each |
+| HAProxy version boundary | `internal/checks/alb/alb_test.go` | Passes on vCenter 8.x, warns on 9.x; **checks the severity stays `warning`** so being phased out can never fail a working deployment on its own |
+| Matrix matches the code | `internal/docs/matrix_test.go` | Every requirement ID a check names exists in the matrix, and the generated summary tables match the registry. Both were confirmed to fire by breaking each on purpose |
 
 ### The two patterns, already established
 
-**Table test** — `internal/results/exitcode_test.go`. Named case per behaviour,
-one assertion, no shared mutable state, failure message that reads as a
-sentence. Every class (c) check gets one of these.
+**Table test** — `internal/results/exitcode_test.go`. One named case per
+behaviour, one thing checked, no shared state between cases, and a failure
+message that reads as a sentence. Every config check gets one of these.
 
-**Golden file** — `internal/renderers/golden_test.go`. Output compared byte for
-byte against a committed file; `make golden` regenerates; the diff is the
-review. The golden files *are* the output contract — a field engineer reads the
-terminal under time pressure and a CI job parses the JSON without reading
-anything, so an unexplained change to either is a regression.
+**Golden file** — `internal/renderers/golden_test.go`. Output is compared byte for byte
+against a committed file, `make golden` regenerates it, and the diff is the
+review. Those files *are* the output people depend on: a field engineer reads the
+terminal under time pressure, and a CI job parses the JSON without reading
+anything at all. An unexplained change to either is a regression.
 
 ### What must be unit-tested as checks land
 
-Every class (c) check, without exception. They are pure functions over a config
-struct; there is no excuse for one to be untested and no reason for one to be
+Every config check, without exception. They are pure functions over a config
+struct, so there is no excuse for one to be untested and no reason for one to be
 slow.
 
 The highest-value cases are the nasty ones, and they should be written before
@@ -94,10 +95,10 @@ the implementations:
   produce a clear result, not a nil dereference
 - Sizing checks with **no declared scale** — must skip, never pass
 
-For class (a) checks, unit testing means substituting `probes.Fake` for
-`probes.System`. That seam exists for exactly this reason: the entire
-network-check suite is testable on a laptop with no network. Cases that must be
-covered per probe:
+For network checks, unit testing means swapping `probes.System` for
+`probes.Fake`. That swap exists for exactly this reason: the whole network-check
+suite can be tested on a laptop with no network. Every probe needs these cases
+covered:
 
 - Success
 - Explicit failure (NXDOMAIN, connection refused)
@@ -109,14 +110,14 @@ covered per probe:
 
 ## Tier 2 — API simulator, and recorded fixtures where it falls short
 
-Class (b) checks are tested against **vcsim**, govmomi's vSphere API simulator,
-which speaks the real SOAP protocol and returns real managed-object shapes.
+API checks are tested against **vcsim**, govmomi's vSphere API simulator, which
+speaks the real SOAP protocol and returns real managed-object shapes.
 
-This is strictly better than the hand-written fixtures originally planned. A
-hand-written fixture tests the parser against *the author's belief* about the
-API — precisely the belief most likely to be wrong. vcsim tests it against an
-independent implementation. Writing these tests immediately caught four defects
-that fixtures would have encoded rather than exposed:
+That is better than the hand-written responses originally planned. A hand-written
+response tests the parser against *what the author believed* the API returns,
+which is the belief most likely to be wrong. vcsim tests it against a separate
+implementation. Writing these tests immediately caught four bugs that
+hand-written responses would have baked in rather than exposed:
 
 1. finder paths are datacenter-relative, so inventory lookups silently found
    nothing;
@@ -128,45 +129,43 @@ that fixtures would have encoded rather than exposed:
    silently matched an empty lookup string — one test was green while proving
    nothing.
 
-**What vcsim does NOT prove:** that a real vCenter behaves identically, that
-VCF 9 returns these shapes, or anything about authentication — vcsim accepts any
-credentials, so it cannot exercise auth rejection at all. An earlier test
-asserted bad credentials were refused and passed only because the transport was
-misconfigured. Those questions need tier 3.
+**What vcsim does NOT prove:** that a real vCenter behaves the same way, that
+VCF 9 returns these shapes, or anything at all about authentication. vcsim
+accepts any credentials, so it cannot test a login being rejected. An earlier
+test claimed to prove bad credentials were refused, and only passed because the
+transport was misconfigured. Those questions need tier 3.
 
-Recorded fixtures remain the right tool where the simulator does not model a
-surface at all — NSX and ALB have no equivalent — and are stored under
+Recorded responses are still the right tool where the simulator does not model
+something at all — there is no equivalent for NSX or ALB — and they live under
 `internal/clients/<component>/testdata/`.
 
-This is what makes credentialed checks CI-testable without credentials. It is
-also the only honest way to test parsing: a hand-written fixture tests the
-parser against the author's belief about the API, which is precisely the belief
-most likely to be wrong.
+This is what lets credentialed checks be tested in CI without credentials. It is
+also the only honest way to test parsing, for the same reason as above: a
+hand-written response only tests the parser against what the author believed.
 
-**Rules for fixtures:**
+**Rules for recorded responses:**
 
-1. **Captured, never hand-written.** Record from a live lab.
+1. **Recorded, never hand-written.** Capture them from a live lab.
 2. **Scrubbed before commit** — hostnames, IPs, serial numbers, certificate
    material, session tokens. The scrubber must be a committed script, not a
    manual pass, so it is repeatable and reviewable.
-3. **Labelled with what produced them** — product version, and the date. A
-   fixture from an unknown version is untrustworthy the moment behaviour changes.
-4. **Both shapes captured** — the healthy response *and* the failure response.
-   A parser tested only against success is half tested, and the failure path is
-   the one that runs when a customer is watching.
-5. **Version-diverse where it matters.** Where a check spans product versions,
-   fixtures from each.
+3. **Labelled with what produced them** — product version and date. A response
+   from an unknown version stops being trustworthy the moment behaviour changes.
+4. **Capture both** — the healthy response *and* the failure response. A parser
+   tested only against success is half tested, and the failure path is the one
+   that runs while a customer is watching.
+5. **Cover more than one version where it matters.** If a check spans product
+   versions, record a response from each.
 
-**What fixture tests assert:** that the client parses the response correctly,
-and that the check maps the parsed state to the right status, severity,
-observation and remediation. They do **not** assert anything about the network —
-that is tier 3.
+**What these tests prove:** that the client parses the response correctly, and
+that the check turns the parsed state into the right status, severity,
+observation and fix. They prove **nothing** about the network — that is tier 3.
 
-**Known limitation, stated rather than papered over:** a fixture proves the code
-handles a response *shape*. It cannot prove the shape is still current. Fixtures
-go stale silently, and a green CI on a stale fixture is a false signal. Mitigation
-is a periodic re-capture against the lab, tracked as recurring work — not a test
-we can write.
+**A limitation worth stating rather than hiding:** a recorded response proves the
+code handles that *shape* of response. It cannot prove the shape is still
+current. Recorded responses go stale quietly, and green CI on a stale one is a
+false signal. The only fix is re-capturing against the lab periodically, tracked
+as recurring work rather than as a test anyone can write.
 
 ---
 
@@ -192,72 +191,72 @@ make test-integration
 | Live vCenter / NSX / ALB clients | Session handling, pagination, API-version negotiation, auth expiry |
 | Fixture capture | The lab run *is* how tier 2 fixtures are produced |
 
-**What integration tests must not do:** modify the lab. The read-only constraint
-is not a CI convenience, it is the product promise. An integration test that
-creates a portgroup to test portgroup detection has broken the tool's core
-guarantee and will eventually be run against production by someone who did not
-read this file.
+**What integration tests must not do:** change anything in the lab. Read-only is
+not a CI convenience, it is what the tool promises. An integration test that
+creates a portgroup in order to test portgroup detection has broken that promise,
+and will eventually be run against production by someone who never read this
+file.
 
 ---
 
-## Coverage by requirement class
+## Coverage by kind of check
 
-| Class | Requirements | Tier 1 | Tier 2 | Tier 3 |
+| Kind | Requirements | Tier 1 | Tier 2 | Tier 3 |
 |---|---|---|---|---|
-| (c) config validation | ~16 | **All** | — | — |
-| (a) network-only | ~24 | All logic, via `probes.Fake` | — | Probe implementations |
-| (b) credentialed | ~48 | Check logic, via fake clients | **All** response parsing | Live client behaviour |
+| Config checks | ~16 | **All** | — | — |
+| Network checks | ~24 | All logic, via `probes.Fake` | — | The probes themselves |
+| API checks | ~48 | Check logic, via fake clients | **All** response parsing | Live client behaviour |
 
-Rough counts against the 97 rows in the matrix. Rows appearing in multiple
-classes are counted in each.
+Rough counts against the 97 rows in the matrix. A row that needs more than one
+kind is counted under each.
 
-These are counts of *requirements*, not of implemented checks. 25 rows have a
-check today; the per-section summary tables in the matrix are the authority on
-which, and are generated rather than maintained by hand.
+These count *requirements*, not checks that exist. 25 rows have a check today.
+The per-section summary tables in the matrix are the place to look for which
+ones, and they are generated rather than kept up by hand.
 
 ---
 
 ## What is deliberately not tested
 
-Stated so that absences are decisions rather than oversights.
+Written down so that what is missing is a decision rather than an oversight.
 
 - **The stub packages.** `internal/checks/{network,vcenter,nsx,alb,configval}`
   return `nil` and have no tests. Testing them would report coverage that does
   not exist.
 - **Cobra wiring.** Flag parsing is the framework's problem. The behaviour that
   matters — exit codes — is tested at the `results` layer where it lives.
-- **`serve`, `snapshot`, `drift`.** Not implemented. `results.WriteBaseline` and
-  `ReadBaseline` should get round-trip tests as soon as `snapshot` is real; the
-  ordering guarantee in `WriteBaseline` is load-bearing for drift and untested
-  today. **This is a known gap.**
+- **`serve`, `snapshot`, `drift`.** Not built yet. `results.WriteBaseline` and
+  `ReadBaseline` should get round-trip tests as soon as `snapshot` is real. Drift
+  depends on `WriteBaseline` writing things in a stable order, and nothing tests
+  that today. **This is a known gap.**
 
 ---
 
 ## Gaps in the current test suite
 
-Honest list, as of the phase-1 scaffold:
+An honest list, as of the phase-1 scaffold:
 
-1. **No round-trip test for the baseline artifact.** `WriteBaseline` sorts
-   results for byte-comparability and nothing verifies it. Should be written
-   before `snapshot` lands.
-2. **No test that the JUnit XML actually validates** against a schema or is
-   accepted by a real CI collector. The mapping is opinionated (a failed warning
-   is a `<failure>`) and unverified against any consumer.
-3. **No fuzz testing of the config parser.** Worth adding once the schema
+1. **No round-trip test for the baseline file.** `WriteBaseline` sorts results so
+   two files can be compared byte for byte, and nothing checks that it does.
+   Should be written before `snapshot` lands.
+2. **Nothing checks the JUnit XML** against a schema, or against a real CI
+   collector. The mapping involves a judgement call (a failed warning becomes a
+   `<failure>`) and no consumer has confirmed it.
+3. **No fuzz testing of the config parser.** Worth adding once the format
    settles; a malformed config should never panic.
-4. **`--save-config` round-tripping is untested.** The saved file is re-read in
-   manual testing, but no test asserts that
-   prompt → config → YAML → load → identical config holds.
-5. **`Elicit` itself is untested.** The prompt primitives are covered, but
-   nothing drives a full question sequence and asserts the assembled
-   `config.Config` — including that a value already supplied by config or flag
-   is never re-asked. The FLB question block added most recently is unexercised
-   for the same reason.
-6. **`internal/config.assertNoSecrets` is effectively unreachable** in normal
-   use, because `yaml.KnownFields(true)` rejects unknown keys first. It is a
-   belt-and-braces guard against a future struct field reintroducing a
-   credential field, and the test acknowledges this rather than asserting a
-   behaviour that does not fire.
+4. **`--save-config` round-tripping is untested.** The saved file gets re-read
+   during manual testing, but no test checks that
+   prompt → config → YAML → load → the same config holds.
+5. **`Elicit` itself is untested.** The individual prompts are covered, but
+   nothing runs a full sequence of questions and checks the `config.Config` that
+   comes out — including that a value already given in a config or a flag is
+   never asked for again. The FLB questions added most recently are untested for
+   the same reason.
+6. **`internal/config.assertNoSecrets` never actually fires** in normal use,
+   because `yaml.KnownFields(true)` rejects unknown keys first. It is a
+   belt-and-braces guard in case a future struct field reintroduces a credential
+   field, and the test says so rather than pretending to cover behaviour that
+   cannot happen.
 
 ---
 

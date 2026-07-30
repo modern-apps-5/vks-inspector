@@ -1,47 +1,49 @@
 # Contributing
 
-How to add to vks-inspector without breaking the properties the rest of it
-depends on. Read [ADR/](ADR/) for why any of these rules exist; this file is the
-operational summary.
+How to add to vks-inspector without breaking what the rest of it relies on. Read
+[ADR/](ADR/) for why these rules exist; this file is the short version.
 
 **Looking for something to work on?** The backlog lives in
-[REQUIREMENTS-MATRIX.md](REQUIREMENTS-MATRIX.md), not in a file of its own —
-each section opens with a generated summary table whose **Status** column says
-what this build does about every row. Grep it:
+[REQUIREMENTS-MATRIX.md](REQUIREMENTS-MATRIX.md) rather than in a file of its
+own. Each section opens with a generated table whose **Status** column says what
+this build does about every row. Grep it:
 
 ```bash
-grep -n '| ready |'        docs/REQUIREMENTS-MATRIX.md  # settled; only the work is missing
-grep -n '| vantage |'      docs/REQUIREMENTS-MATRIX.md  # decide the vantage story first
-grep -n '| NSX client |'   docs/REQUIREMENTS-MATRIX.md  # unlocked by one client
-grep -n 'implemented\.\*'  docs/REQUIREMENTS-MATRIX.md  # per-section rollups
+grep -n '| ready |'         docs/REQUIREMENTS-MATRIX.md  # settled; only the work is missing
+grep -n '| run location |'  docs/REQUIREMENTS-MATRIX.md  # needs a decision about where it runs
+grep -n '| NSX client |'    docs/REQUIREMENTS-MATRIX.md  # unlocked by one client
+grep -n 'implemented\.\*'   docs/REQUIREMENTS-MATRIX.md  # per-section totals
 ```
 
-Those tables are generated from the registry by `make matrix` and verified by
-`make test`, so they cannot drift from the code. See
+`make matrix` generates those tables from the registry and `make test` checks
+them, so they cannot fall out of date. See
 [Status keys](REQUIREMENTS-MATRIX.md#status-keys) for what each value means.
 
-**Where the coverage is.** 25 of 97 rows are implemented. The binding
-constraint is not engineering time — 45 rows are blocked on confirming the
-requirement itself, and no amount of code moves those. Of what is actionable:
+**Where the coverage is.** 25 of 97 rows are done. What holds the rest up is
+mostly not engineering time: 45 rows are waiting on someone confirming the
+requirement itself, and no amount of code moves those. Of the rest:
 
-- **11 rows need no new infrastructure**, though 6 of those are `vantage` rows
-  that need a design decision before anyone writes code.
-- **An NSX client unlocks 7 rows** — the largest single win available.
+- **11 rows need nothing new built first** — though 6 of those only mean
+  something when run from a specific network, which needs a design decision
+  before anyone writes code.
+- **An NSX client unlocks 7 rows** — the biggest single win available.
 - An ALB client unlocks 5. A HAProxy Data Plane client unlocks 2, on a topology
-  being phased out (`LB-HAP-000`) — weigh that before spending time there.
+  that is being phased out (`LB-HAP-000`) — weigh that before spending time
+  there.
 
 ---
 
-## The rule that governs every check
+## The one rule for every check
 
-> Write every check so the same check unit runs in **preflight** mode (declared
-> intent) and **verify** mode (live environment), and so every result serialises
-> into a baseline artifact a later **drift** run can diff.
+> Write each check so the same code runs in **preflight** mode (against what you
+> declared) and in **verify** mode (against the live environment), and so every
+> result can be written to a baseline file that a later **drift** run can
+> compare against.
 
-A check that only answers "does this config make sense" is not reusable and is
+A check that only answers "does this config make sense" cannot be reused and is
 the wrong shape. If a proposed check cannot fill its row in the mode table in
-[CHECK-TAXONOMY.md](CHECK-TAXONOMY.md), that is a design conversation — not an
-exception to grant.
+[check-types.md](check-types.md), it needs a design discussion rather than an
+exception.
 
 ---
 
@@ -50,71 +52,69 @@ exception to grant.
 ```
 cmd/vksinspect/          CLI. One file per subcommand. Thin — logic belongs in checks.
 internal/
-  buildinfo/             Link-time version stamps
-  config/                EnvironmentSpec + topology axes + structural validation
-  prompt/                Interactive question flow; assembles a config.Config
+  buildinfo/             Version stamps set at link time
+  config/                EnvironmentSpec + the two topology settings + shape checks
+  prompt/                Interactive questions; assembles a config.Config
   netx/                  Address arithmetic — overlap, containment, range sizing
-  creds/                 Credential resolution. Redacts, refuses to serialise.
-  results/               Result / Report / exit codes / baseline. Leaf package.
-  checks/                The Check interface, Meta, RunContext, capabilities
+  creds/                 Finds credentials. Redacts them, refuses to write them out.
+  results/               Result / Report / exit codes / baseline. Imports nothing.
+  checks/                The Check interface, Meta, RunContext, access it needs
     reference/           Reference implementation — copy this shape
-    configval/           Class (c): pure config arithmetic
-    network/             Class (a): network-only probes             [stub]
-    vcenter/ nsx/ alb/   Class (b): credentialed                    [stub]
-    flb/                 Class (b): vCenter-credentialed, no dedicated controller
+    configval/           Config checks: pure arithmetic
+    network/             Network checks: probes, no credentials       [stub]
+    vcenter/ nsx/ alb/   API checks: need credentials                 [stub]
+    flb/                 API checks: uses vCenter, no controller of its own
                           (flb.version-supported implemented; rest [stub])
-    all/                 Explicit registration of everything above
-  registry/              Check storage + selection with reasons
-  engine/                Runs selected checks, assembles a Report. Mode-agnostic.
+    all/                 Registers everything above, by hand
+  registry/              Holds the checks; selects them and says why
+  engine/                Runs the selected checks and builds a Report. Same in every mode.
   renderers/             terminal / json / junit
   probes/                The only place allowed to open a socket    [stub]
   clients/               Read-only vCenter / NSX / ALB clients      [stub]
 ```
 
-Import direction is one-way: `results` ← `checks` ← `registry` ← `engine` ←
-`cmd`. `checks` must never import its own subpackages — that is what
-`checks/all` is for.
+Imports only go one way: `results` ← `checks` ← `registry` ← `engine` ← `cmd`.
+`checks` must never import its own subpackages — that is what `checks/all` is
+for.
 
 ---
 
 ## Adding a check
 
 1. **Find or add its row in [REQUIREMENTS-MATRIX.md](REQUIREMENTS-MATRIX.md).**
-   **If the row is flagged `⚑`, stop.** A flagged row is an open question, and
-   building on it launders a guess into an assertion that someone under time
+   **If the row is flagged `⚑`, stop.** A flagged row is still an open question,
+   and building on it turns a guess into a stated fact that someone under time
    pressure will believe.
-2. Put it in the package matching its [taxonomy class](CHECK-TAXONOMY.md).
+2. Put it in the package for [its kind of check](check-types.md).
 3. Copy the shape of `internal/checks/reference`.
-4. Declare `Modes` honestly. Supporting only one mode needs a comment justifying
-   it.
-5. Declare `Layer` — the default is `supervisor`, so set it explicitly if it is
-   not.
-6. Declare `Applies` against the topology **axis** the requirement actually
+4. Set `Modes` honestly. If it only supports one mode, add a comment saying why.
+5. Set `Layer` — the default is `supervisor`, so set it explicitly if it is not.
+6. Set `Applies` against the topology **setting** the requirement actually
    depends on, not the list of combinations it happens to apply to today.
-7. Declare `Needs` capabilities. A missing capability makes the engine skip with
-   a reason. Never fail because *we* lacked access.
+7. Set `Needs` for the access it requires. Without that access the engine skips
+   the check and says why. Never fail because *we* could not get in.
 8. Register it in `internal/checks/all/all.go`. **If it is not listed there, it
    does not exist.**
-9. Fill `Observed.Data` with something machine-comparable. Prose alone is
-   invisible to drift.
-10. Follow the fan-out idiom (below).
-11. Write the test with the check, not after it.
+9. Put something comparable in `Observed.Data`. A sentence alone is invisible to
+   drift.
+10. Follow the reporting pattern below.
+11. Write the test alongside the check, not afterwards.
 
-### The fan-out idiom
+### Reporting more than one finding
 
-**One passing row summarising what was examined, or one failing row per problem**
-— each with a `Target` naming the specific finding.
+**One passing row summarising what was looked at, or one failing row per
+problem** — each with a `Target` naming the specific finding.
 
-A single result saying "3 overlaps" cannot be triaged, cannot be individually
-severity-overridden, and cannot be diffed by drift when one of the three is
-fixed. The passing case collapses to one row because "47 pairs were disjoint" is
-not 47 findings.
+A single result saying "3 overlaps" cannot be triaged, cannot have its severity
+overridden one at a time, and cannot be compared by drift when one of the three
+gets fixed. The passing case collapses to one row because "47 pairs did not
+overlap" is not 47 findings.
 
 ### If there was nothing to check, return `skip`
 
-Never `pass`. An empty `externalCIDRs` list, no declared ranges, no supplied
-scale — all of these mean the check had nothing to compare against. A green tick
-for work that was not done is worse than admitting it was not done.
+Never `pass`. An empty `externalCIDRs` list, no declared ranges, no scale
+supplied — each of these means the check had nothing to compare against. A green
+tick for work that was never done is worse than saying it was not done.
 
 ---
 
@@ -132,19 +132,18 @@ for work that was not done is worse than admitting it was not done.
 
 ---
 
-## Result semantics
+## What each status means
 
 | Status | Means |
 |---|---|
-| `pass` | The expected condition holds |
-| `fail` | It demonstrably does not |
-| `skip` | Not applicable, or we lacked a capability. **Always with a reason.** |
-| `unknown` | Ran, could not determine. A filtered port. **Never assert a failure you did not observe.** |
-| `error` | The *check* malfunctioned. A tool fault. Always exit 3. |
+| `pass` | What was expected is what was found |
+| `fail` | It demonstrably is not |
+| `skip` | Does not apply, or we did not have the access. **Always with a reason.** |
+| `unknown` | It ran but could not tell — a filtered port, say. **Never report a failure you did not see.** |
+| `error` | The *check* broke. A fault in the tool. Always exit 3. |
 
-Severity (`blocker` / `warning` / `info`) is separate, and is policy rather than
-the check's decision — `config.Policy.SeverityOverrides` can change it at
-runtime.
+Severity (`blocker` / `warning` / `info`) is separate. It is a policy decision,
+not the check's, and `config.Policy.SeverityOverrides` can change it at runtime.
 
 ---
 
@@ -152,14 +151,15 @@ runtime.
 
 - **Table tests** for pure logic — pattern: `internal/results/exitcode_test.go`
 - **Golden files** for output — pattern: `internal/renderers/golden_test.go`.
-  Regenerate with `make golden` and **review the diff; it is the contract.**
-- Class (a) checks are unit-tested with `probes.Fake` — no network in CI, ever
-- Class (b) checks are tested with recorded fixtures captured from a lab and
-  scrubbed by a committed script
+  Regenerate with `make golden` and **review the diff. That output is what
+  people and pipelines depend on.**
+- Network checks are unit-tested with `probes.Fake` — no network in CI, ever
+- API checks are tested against API responses recorded from a lab and scrubbed
+  by a script kept in the repo
 - Anything needing a live lab is `//go:build integration` and never runs in CI
 
-See [unit-test-coverage.md](unit-test-coverage.md) for the full tiering and
-the current gaps.
+See [unit-test-coverage.md](unit-test-coverage.md) for the full picture and the
+current gaps.
 
 ```bash
 make check             # fmt + vet + test
@@ -177,30 +177,30 @@ chunks, not one blob. Explain *why* in the body — the diff already says what.
 
 ---
 
-## Known debt
+## Known gaps
 
-Recorded so absences are decisions rather than oversights.
+Written down so that what is missing is a decision rather than an oversight.
 
-- Matrix rows are not re-annotated with topology axes
+- Matrix rows have not been re-annotated with the two topology settings
   ([ADR-0011](ADR/0011-topology-axes.md)) or layer tags
   ([ADR-0012](ADR/0012-supervisor-vks-layers.md)).
-- VKS-layer requirement rows are not written up at all — see the Layer section
-  of the matrix.
-- No test drives the interactive prompt flow; it is exercised manually. This is
-  the largest untested surface in the tool.
-- `results.WriteBaseline`'s ordering guarantee is load-bearing for drift and has
-  no round-trip test.
-- ~~Nothing verifies that a check's cited requirement IDs actually exist in the
-  matrix.~~ **Closed.** `internal/docs` fails the build on an invented ID, and
-  on summary tables that have drifted from the registry.
-- The `blockedBy` map in `internal/docs/matrix_test.go` is hand-maintained. It
-  has to be — "this needs an NSX client" is a judgement about work not done,
-  not a fact derivable from work done. A missing entry degrades to `—` rather
-  than to a wrong claim.
+- VKS-layer requirement rows have not been written up at all — see the Layer
+  section of the matrix.
+- No test exercises the interactive prompts; they are only tested by hand. This
+  is the largest untested part of the tool.
+- Drift relies on `results.WriteBaseline` writing things in a stable order, and
+  nothing tests that it does.
+- ~~Nothing checks that the requirement IDs a check names actually exist in the
+  matrix.~~ **Closed.** `internal/docs` fails the build on a made-up ID, and on
+  summary tables that no longer match the registry.
+- The `blockedBy` map in `internal/docs/matrix_test.go` is maintained by hand.
+  It has to be — "this needs an NSX client" is a judgement about work not done,
+  which cannot be derived from work that is done. A missing entry falls back to
+  `—` rather than to a wrong claim.
 
 ## Open questions
 
-These change what gets built and are not ours to decide unilaterally.
+These change what gets built, and they are not ours to decide alone.
 
 1. ~~Is `vds+haproxy` in scope?~~ **Resolved:** yes, operator-confirmed. HAProxy
    is not removed in VCF 9 — it is fully supported on vCenter 8.x and being
@@ -211,18 +211,19 @@ These change what gets built and are not ours to decide unilaterally.
    just the tool's own read access? See `COM-API-001`.
 4. Two matrix rows need config fields that do not exist (declared DHCP scopes):
    `SUP-MGT-003`, `VDS-DHCP-001`. Add the fields or drop the rows.
-5. Where do version and port matrices come from — shipped with a release, or
-   supplied by the user? They must be data, never code — with one narrow
+5. Where do the version and port tables come from — shipped with a release, or
+   supplied by the user? They have to be data, never code, with one narrow
    exception now settled in
-   [ADR-0015](ADR/0015-flagged-rows-and-version-constants.md): a single
-   existence or support-lifecycle boundary for one named product may be a
-   constant. `flb.version-supported` and `hap.version-supported` are the two,
-   and a third that does not fit that shape is evidence the carve-out was too
-   generous rather than precedent for widening it.
-6. Is a verify-mode result that is *better* than declared a pass or a drift?
+   [ADR-0015](ADR/0015-flagged-rows-and-version-constants.md): the version at
+   which one named product starts or stops being supported may be a constant.
+   `flb.version-supported` and `hap.version-supported` are the two. A third one
+   that does not fit that shape would mean the exception was written too widely,
+   not that it should be widened further.
+6. In verify mode, if the live environment is *better* than what was declared,
+   is that a pass or a drift?
 7. What exit code does `drift` use?
-8. `externalCIDRs` semantics: a site declaring `10.0.0.0/8` as must-not-collide
-   while deploying management into `10.50.0.0/24` gets a blocker. Correct by the
-   letter, arguably not what they meant. Should deployment networks be
-   auto-excluded from their own external comparison?
+8. What should `externalCIDRs` mean exactly? A site that declares `10.0.0.0/8`
+   as must-not-collide, then deploys management into `10.50.0.0/24`, gets a
+   blocker. That is right by the letter and arguably not what they meant. Should
+   the deployment's own networks be excluded from that comparison automatically?
 9. `LICENSE` is a placeholder.

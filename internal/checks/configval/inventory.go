@@ -149,8 +149,8 @@ type infraAddress struct {
 // cluster has to talk to.
 //
 // Only addresses declared literally in the config are returned. Endpoints given
-// as FQDNs are invisible here — resolving them is a network probe, which is
-// class (a), not class (c). A collision against an unresolved FQDN is therefore
+// as FQDNs are invisible here — resolving them needs a network probe, which
+// this check does not have. A collision against an unresolved FQDN is therefore
 // something this check cannot see, and the result says so rather than implying
 // full coverage.
 func infraAddresses(cfg *config.Config) []infraAddress {

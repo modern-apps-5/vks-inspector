@@ -1,5 +1,5 @@
 // Package vcenter holds checks requiring vCenter API credentials.
-// Taxonomy class (b) — see docs/CHECK-TAXONOMY.md.
+// An API check — see docs/check-types.md.
 //
 // Every check here declares checks.CapVCenter, so a run without credentials
 // reports them as skips rather than failing an environment it never inspected.

@@ -1,5 +1,5 @@
 // Package alb will hold checks requiring NSX Advanced Load Balancer (Avi)
-// controller credentials. Taxonomy class (b) — see docs/CHECK-TAXONOMY.md.
+// controller credentials. An API check — see docs/check-types.md.
 //
 // HAProxy checks live here too rather than in a package of their own:
 // HAProxy is a single small surface, it is being phased out starting with the

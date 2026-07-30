@@ -9,10 +9,10 @@ import (
 
 // Fake is a scripted probe implementation for tests. It performs no I/O.
 //
-// This seam is why the entire class-(a) check suite is testable on a laptop
+// This seam is why the entire network-check suite is testable on a laptop
 // with no network and no lab. A check that reaches for net.Dial directly
 // bypasses it and becomes untestable — that is why probing is confined to this
-// package. See docs/CHECK-TAXONOMY.md.
+// package. See docs/check-types.md.
 //
 // Anything not scripted returns a deliberately unhelpful answer rather than a
 // zero value, so a test that forgets to script a call fails loudly instead of

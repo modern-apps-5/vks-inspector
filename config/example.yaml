@@ -1,7 +1,7 @@
-# vksinspect environment config — declared intent for one VKS environment.
+# vksinspect environment config — what one VKS environment is meant to be.
 #
-# This file describes what the environment is SUPPOSED to be. The same document
-# drives every mode:
+# This file describes what the environment is SUPPOSED to be. Every mode reads
+# the same file:
 #   check     compares it against the network before anything is deployed
 #   verify    compares it against what actually got built
 #   snapshot  records it alongside the observations of the day
@@ -26,10 +26,10 @@ metadata:
     owner: platform-team
     stage: lab
 
-# Topology is two independent axes, because they are two independent decisions
-# and requirements attach to whichever one they actually depend on. The NSX
-# overlay MTU requirement depends on `networking` and is indifferent to which
-# load balancer sits in front of it.
+# Topology is two settings you choose separately, because they are two separate
+# decisions, and each requirement attaches to whichever one it actually depends
+# on. The NSX overlay MTU requirement depends on `networking` and does not care
+# which load balancer sits in front of it.
 #
 #   networking:   vds | nsx | nsx-vpc
 #   loadBalancer: nsx-lb | alb | haproxy | flb

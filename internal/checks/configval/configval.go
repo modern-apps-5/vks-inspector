@@ -1,6 +1,6 @@
 // Package configval holds pure input-validation checks: arithmetic over the
-// declared config with no network and no API access. Taxonomy class (c) — see
-// docs/CHECK-TAXONOMY.md.
+// declared config with no network and no API access. A config check — see
+// docs/check-types.md.
 //
 // These are the cheapest, fastest and most deterministic checks in the tool,
 // they need no lab to test, and they catch the single most common class of

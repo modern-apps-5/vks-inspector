@@ -6,9 +6,9 @@ import (
 
 // newDriftCmd re-runs against a stored baseline and reports what changed.
 //
-// Stubbed in phase 1. This is the command that constrains everything else: it
-// is why Result.Observed carries structured Data rather than a sentence, and
-// why every result is serialisable. See docs/ADR/0003-structured-observations.md.
+// Stubbed in phase 1. This is the command that shapes everything else: it is
+// why Result.Observed carries Data rather than just a sentence, and why every
+// result can be written to a file. See docs/ADR/0003-structured-observations.md.
 func newDriftCmd(g *globalOpts) *cobra.Command {
 	var baseline string
 
@@ -22,19 +22,19 @@ Not implemented in phase 1.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			// TODO(phase-4): load the baseline with results.ReadBaseline, run
 			// the engine in the baseline's own mode, and diff with
-			// results.DiffBaseline. Semantics that must be settled first:
-			//   - a change in Run.ConfigDigest means the declared intent
-			//     changed, which is not environment drift and must be reported
-			//     separately or the report is misleading;
-			//   - refusing to diff across differing Run.Mode;
-			//   - what exit code drift uses. Reusing 1/2 by severity is the
-			//     obvious choice but conflates "a check failed" with "something
+			// results.DiffBaseline. Questions to settle first:
+			//   - a change in Run.ConfigDigest means what we declared changed,
+			//     which is not the environment drifting and has to be reported
+			//     separately or the report misleads;
+			//   - refusing to compare across different Run.Mode values;
+			//   - what exit code drift uses. Reusing 1 and 2 by severity is the
+			//     obvious choice, but it mixes "a check failed" with "something
 			//     changed", and those are different questions.
 			return notImplemented(cmd, "phase 4",
 				"drift diffs two results.Reports; the diff types already exist in\n"+
 					"internal/results/baseline.go (Change, DiffBaseline).")
 		},
 	}
-	cmd.Flags().StringVar(&baseline, "baseline", "", "path to the stored baseline artifact")
+	cmd.Flags().StringVar(&baseline, "baseline", "", "path to the saved baseline file")
 	return cmd
 }

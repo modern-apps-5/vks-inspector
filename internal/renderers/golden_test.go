@@ -59,7 +59,7 @@ func fixtureReport() *results.Report {
 			Status:         results.StatusFail,
 			Mode:           "preflight",
 			Target:         "kubernetes.podCIDRs[0] vs networks.workload[0]",
-			Expected:       results.Value{Summary: "10.244.0.0/20 and 10.20.0.0/16 are disjoint"},
+			Expected:       results.Value{Summary: "10.244.0.0/20 and 10.20.0.0/16 share no addresses"},
 			Observed:       results.Value{Summary: "10.244.0.0/20 overlaps 10.244.0.0/16", Data: map[string]any{"overlap": "10.244.0.0/20"}},
 			Remediation:    "Re-plan the pod CIDR so it does not intersect the workload network. Overlapping ranges will route unpredictably and cannot be fixed after deployment without rebuilding the Supervisor.",
 			StartedAt:      at(1), FinishedAt: at(1), DurationMS: 1,
@@ -91,7 +91,7 @@ func fixtureReport() *results.Report {
 			Target:         "nsx.lab.example.com:443",
 			Expected:       results.Value{Summary: "TCP 443 accepts a connection"},
 			Observed:       results.Value{Summary: "no response — filtered, not refused", Data: map[string]any{"state": "filtered"}},
-			Remediation:    "A silent drop is a firewall, not a dead service. Confirm the path from this vantage point before treating it as a failure.",
+			Remediation:    "A silent drop is a firewall, not a dead service. Confirm the path from the machine you ran this on before treating it as a failure.",
 			StartedAt:      at(3), FinishedAt: at(3), DurationMS: 5000,
 		},
 		{

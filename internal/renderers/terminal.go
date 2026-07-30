@@ -61,7 +61,7 @@ func (t *Terminal) Render(w io.Writer, rep *results.Report) error {
 	bw.printf("%s  %s\n", t.paint(cBold, "vksinspect"), rep.Tool.Version)
 	bw.printf("  mode      %s\n", rep.Run.Mode)
 	bw.printf("  topology  %s\n", rep.Run.Topology)
-	bw.printf("  vantage   %s\n", rep.Run.Vantage)
+	bw.printf("  ran from  %s\n", rep.Run.Vantage)
 	if rep.Run.Placeholder {
 		bw.printf("  answers   %s\n", t.paint(cYellow, "PLACEHOLDER — example values, not a real environment"))
 	}
@@ -107,9 +107,9 @@ func (t *Terminal) renderResult(bw *errWriter, r results.Result) {
 	case results.StatusError:
 		bw.printf("      error     %s\n", r.Err)
 	default:
-		// Expected/observed are printed for passes too. A preflight report is
-		// evidence, not just a verdict: "it passed" is far less useful to the
-		// person reading it later than "it passed, and here is what was seen".
+		// Expected/observed are printed for passes too. A report is a record,
+		// not just a verdict: "it passed" is far less useful to whoever reads
+		// it later than "it passed, and here is what was seen".
 		//
 		// On a failure the observation is relabelled "problem" and printed
 		// first. A reader scanning a red block wants the fault, not a restated
@@ -143,12 +143,12 @@ func (t *Terminal) renderResult(bw *errWriter, r results.Result) {
 	bw.printf("\n")
 }
 
-// renderCoverage states what the run was capable of inspecting.
+// renderCoverage says what this run was actually able to inspect.
 //
-// This sits immediately above the verdict on purpose. "4 passed, 0 failed" and
-// "this environment is ready" are different claims, and a reader who is handed
-// only the first will assume the second. A run that never opened a socket has
-// to say so next to its own green tick, not in a footnote.
+// It sits immediately above the verdict on purpose. "4 passed, 0 failed" and
+// "this environment is ready" are different claims, and anyone handed only the
+// first will assume the second. A run that never opened a socket has to say so
+// next to its own green tick, not in a footnote.
 func (t *Terminal) renderCoverage(bw *errWriter, rep *results.Report) {
 	c := rep.Run.Coverage
 
@@ -165,7 +165,7 @@ func (t *Terminal) renderCoverage(bw *errWriter, rep *results.Report) {
 	bw.printf("checks    %d ran of %d in this build — %d config-only, %d network probe(s), %d API check(s)\n",
 		c.Executed, c.ChecksInBuild, c.ConfigOnly, c.NetworkProbes, c.APIChecks)
 
-	// Name the access this run did not have. Otherwise a reader sees the pass
+	// Name the access this run did not have. Otherwise the reader sees the pass
 	// count and has to work out for themselves that five checks never ran.
 	if len(c.MissingCapabilities) > 0 {
 		names := make([]string, 0, len(c.MissingCapabilities))
@@ -185,7 +185,7 @@ func (t *Terminal) renderCoverage(bw *errWriter, rep *results.Report) {
 func (t *Terminal) renderSummary(bw *errWriter, rep *results.Report) {
 	s := rep.Summary
 	t.renderCoverage(bw, rep)
-	bw.printf("%s  %d checks: %d passed, %d failed, %d skipped, %d indeterminate, %d errors\n",
+	bw.printf("%s  %d checks: %d passed, %d failed, %d skipped, %d unknown, %d errors\n",
 		t.paint(cBold, "summary"), s.Total, s.Pass, s.Fail, s.Skip, s.Unknown, s.Errors)
 
 	// A run in which nothing actually executed must not read as a clean bill of
@@ -194,7 +194,7 @@ func (t *Terminal) renderSummary(bw *errWriter, rep *results.Report) {
 	// that were never supplied.
 	if s.Total > 0 && s.Pass == 0 && s.Fail == 0 && s.Unknown == 0 && s.Errors == 0 {
 		bw.printf("          %s\n", t.paint(cYellow,
-			"every check was skipped — this run inspected nothing and is not evidence of readiness"))
+			"every check was skipped — this run inspected nothing, so it says nothing about readiness"))
 		bw.printf("          exit code %d (%s)\n",
 			results.ExitCode(rep.Results), results.ExitCodeText(results.ExitCode(rep.Results)))
 		return
@@ -222,7 +222,7 @@ func (t *Terminal) renderSummary(bw *errWriter, rep *results.Report) {
 	case results.ExitBlocker:
 		bw.printf("          %s\n", t.paint(cRed, fmt.Sprintf("%d blocker(s) must be fixed before deployment", s.Blockers)))
 	case results.ExitWarning:
-		bw.printf("          %s\n", t.paint(cYellow, fmt.Sprintf("%d warning(s), %d indeterminate", s.Warnings, s.Unknown)))
+		bw.printf("          %s\n", t.paint(cYellow, fmt.Sprintf("%d warning(s), %d could not be determined", s.Warnings, s.Unknown)))
 	default:
 		bw.printf("          %s\n", t.paint(cRed, "tool error — results are incomplete"))
 	}

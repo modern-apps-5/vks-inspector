@@ -4,12 +4,12 @@
 
 ## Context
 
-The idiomatic-looking way to build a check registry in Go is a package-level
-`init()` in each check package that registers into a global. It reads well and
-it has a specific, nasty failure mode: which checks exist becomes a function of
-which packages happen to be imported. A refactor that drops an unused-looking
-import silently removes checks from the build, the tests still pass, and the
-report simply contains fewer rows than it should.
+The way this usually gets done in Go is an `init()` in each check package that
+registers itself into a global. It reads nicely and it fails in a nasty,
+specific way: which checks exist becomes a matter of which packages happen to be
+imported. A refactor that drops an import that looks unused quietly removes
+checks from the build, the tests still pass, and the report just has fewer rows
+in it than it should.
 
 For a tool whose entire purpose is to tell someone their environment is ready,
 a silently-shrinking check set is close to the worst possible bug. The report

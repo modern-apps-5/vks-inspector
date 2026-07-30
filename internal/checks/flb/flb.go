@@ -1,5 +1,5 @@
 // Package flb holds checks for vSphere Supervisor with Foundation Load
-// Balancer (VCF 9.1+). Taxonomy class (b) — see docs/CHECK-TAXONOMY.md — but
+// Balancer (VCF 9.1+). An API check — see docs/check-types.md — but
 // unlike alb and nsx, FLB has no separate controller API to authenticate
 // against: it is deployed and configured through vCenter itself, so its
 // checks lean on CapVCenter rather than a dedicated capability or client.

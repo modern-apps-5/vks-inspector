@@ -1,28 +1,28 @@
 package results
 
-// Exit codes are contractual — this tool runs in pipelines and the numbers are
-// part of its API. Do not add, reorder or repurpose these.
+// Exit codes are fixed — this tool runs in pipelines, and for automation these
+// numbers are the interface. Do not add, reorder or reuse them.
 // See docs/ADR/0006-exit-code-contract.md.
 const (
 	// ExitPass — every check passed (or was legitimately skipped).
 	ExitPass = 0
 	// ExitBlocker — at least one blocker-severity check failed.
 	ExitBlocker = 1
-	// ExitWarning — no blockers failed, but warnings failed or results were
-	// indeterminate.
+	// ExitWarning — no blockers failed, but warnings failed or some checks
+	// could not tell.
 	ExitWarning = 2
 	// ExitToolError — the tool could not do its job: bad config, unreadable
 	// credentials file, a check that panicked. Says nothing about the
-	// environment. Callers must not read this as "environment is fine".
+	// environment. Never read this as "the environment is fine".
 	ExitToolError = 3
 )
 
 // ExitCode derives the process exit code from a result set.
 //
-// Precedence: tool error > blocker > warning > pass. An indeterminate result
-// (StatusUnknown) never produces ExitBlocker even on a blocker-severity check —
-// we did not observe a failure, so we do not assert one. It produces
-// ExitWarning so a pipeline still notices.
+// Precedence: tool error > blocker > warning > pass. A check that could not
+// tell (StatusUnknown) never produces ExitBlocker, even at blocker severity —
+// we did not see a failure, so we do not report one. It produces ExitWarning,
+// so a pipeline still notices.
 func ExitCode(res []Result) int {
 	code := ExitPass
 	for _, r := range res {
@@ -49,13 +49,14 @@ func ExitCodeText(code int) string {
 	switch code {
 	case ExitPass:
 		// Not "all checks passed": a run may have skipped most of its checks,
-		// or run only config arithmetic. This states the contract — nothing
-		// failed — without implying coverage the run may not have had.
+		// or done nothing but config arithmetic. This says what the code
+		// actually means — nothing failed — without implying coverage the run
+		// may not have had.
 		return "no check failed"
 	case ExitBlocker:
 		return "one or more blockers failed"
 	case ExitWarning:
-		return "warnings or indeterminate results only"
+		return "only warnings, or checks that could not tell"
 	case ExitToolError:
 		return "tool error"
 	default:

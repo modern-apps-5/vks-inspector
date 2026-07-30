@@ -1,4 +1,4 @@
-# ADR-0014 — vCenter is the entry point; discover the rest
+# ADR-0014 — vCenter is the starting point; find the rest from it
 
 **Status:** Accepted · **Date:** 2026-07-29 · **Partially implemented**
 

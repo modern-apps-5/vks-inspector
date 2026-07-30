@@ -1,24 +1,24 @@
 // Package network holds checks verifiable from the network alone: no
 // management-plane credentials, only a host with an IP address on the right
-// segment. Taxonomy class (a) — see docs/CHECK-TAXONOMY.md.
+// segment. A network check — see docs/check-types.md.
 //
-// This is the class that makes the tool useful to someone handed a jump host
-// and no vCenter account, which is the common field situation.
+// These are what make the tool useful to someone handed a jump host and no
+// vCenter account, which is the common field situation.
 //
 // Three rules these checks must not break:
 //
-//  1. **Vantage point is part of the result.** "Port 443 is open" is a fact
-//     about the environment *as seen from one host*. A pass from an operator's
-//     laptop says nothing about the workload segment. Every report records
-//     run.vantage for exactly this reason.
+//  1. **Where the check ran is part of the answer.** "Port 443 is open" is a
+//     fact about the environment *as seen from one machine*. A pass from an
+//     operator's laptop says nothing about the workload segment. Every report
+//     records the host the probes ran from for exactly this reason.
 //
-//  2. **Port state is tri-state, never boolean.** Open, refused and filtered are
-//     three findings with three remediations. Filtered maps to StatusUnknown:
-//     we did not observe a failure and do not get to assert one.
+//  2. **A port has three states, not two.** Open, refused and filtered are
+//     three findings with three different fixes. Filtered maps to
+//     StatusUnknown: we did not see a failure, so we do not get to report one.
 //
-//  3. **Absence of evidence is not evidence.** A resolver that times out has not
-//     necessarily failed. Where a probe cannot distinguish, the result is
-//     unknown with the ambiguity stated.
+//  3. **Not seeing something is not the same as it not being there.** A
+//     resolver that times out has not necessarily failed. Where a probe cannot
+//     tell the difference, the result is unknown and says what was ambiguous.
 package network
 
 import (
