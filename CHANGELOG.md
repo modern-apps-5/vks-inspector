@@ -173,17 +173,17 @@ changed" from "the declared intent changed". Written now so `snapshot` and
 `drift` have a fixed target.
 
 **Documentation** — `docs/REQUIREMENTS-MATRIX.md` (97 rows, 49 flagged as
-unverified, 25 implemented), `docs/CHECK-TAXONOMY.md`, `docs/test-coverage.md`,
-and 15 ADRs.
+unverified, 25 implemented), `docs/CHECK-TAXONOMY.md`,
+`docs/unit-test-coverage.md`, and 15 ADRs.
 
 ### Changed
 
 - **README** rewritten. It previously described a tool that did not exist. It
   now states what works, what does not, and that most of what is checked are
   Supervisor prerequisites rather than VKS ones.
-- **`docs/test-coverage.md`** rewritten against the check taxonomy. The previous
-  flat checklist of desired checks became requirement rows in the matrix; this
-  file now covers how the code is verified.
+- **`docs/unit-test-coverage.md`** rewritten against the check taxonomy. The
+  previous flat checklist of desired checks became requirement rows in the
+  matrix; this file now covers how the code is verified.
 - **Contributing pointer** corrected from GitLab to GitHub — the previous README
   contradicted itself by naming GitLab while linking to github.com.
 - **`config/example.yaml`** addressing reworked. The original declared a pod

@@ -215,7 +215,7 @@ type Check interface {
 
 // RunContext is everything a check is allowed to touch. Passing this explicitly
 // rather than reaching for globals is what makes checks unit-testable without a
-// lab — see docs/test-coverage.md.
+// lab — see docs/unit-test-coverage.md.
 type RunContext struct {
 	Mode   Mode
 	Config *config.Config

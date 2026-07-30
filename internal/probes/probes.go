@@ -4,7 +4,7 @@
 // It exists as a seam, not an abstraction for its own sake. Checks take this
 // interface rather than calling net.Dial directly so the whole class-(a) check
 // suite is unit-testable with a fake, on a laptop, in CI, with no lab and no
-// network. See docs/test-coverage.md.
+// network. See docs/unit-test-coverage.md.
 //
 // Every probe is read-only against the target and honours context cancellation.
 // Anything that could plausibly disturb a production network belongs behind

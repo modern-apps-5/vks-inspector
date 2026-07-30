@@ -27,7 +27,7 @@ import (
 // returns these shapes, or anything about authentication against a real
 // identity source. vcsim is a model, not the thing. Tier-3 integration tests
 // against a live lab remain necessary and remain unwritten.
-// See docs/test-coverage.md.
+// See docs/unit-test-coverage.md.
 
 // simVCenter starts a simulated vCenter and returns a connected client.
 func simVCenter(t *testing.T) (*vcenter.Client, *simulator.Model) {

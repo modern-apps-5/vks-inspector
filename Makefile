@@ -40,7 +40,7 @@ release:
 	done
 
 # Default test run. Excludes anything build-tagged `integration` — those need a
-# live lab and never run in CI. See docs/test-coverage.md.
+# live lab and never run in CI. See docs/unit-test-coverage.md.
 .PHONY: test
 test:
 	go test ./...

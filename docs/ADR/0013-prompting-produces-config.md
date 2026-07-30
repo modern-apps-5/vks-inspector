@@ -67,4 +67,4 @@ reading.
   questions means editing control flow. Acceptable at this size; if it grows
   much past its current length it wants to become a declarative question list.
 - **Not done:** no test drives the prompt flow end to end. It is exercised
-  manually. This is a real gap and is listed in test-coverage.md.
+  manually. This is a real gap and is listed in unit-test-coverage.md.

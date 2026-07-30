@@ -705,7 +705,7 @@ make clean
 vCenter behaviour is tested against **vcsim**, govmomi's API simulator, so it runs
 in CI without a lab. That verifies request construction and response parsing; it
 does not verify real authentication or VCF 9 specifics. See
-[docs/test-coverage.md](docs/test-coverage.md).
+[docs/unit-test-coverage.md](docs/unit-test-coverage.md).
 
 ---
 
@@ -716,7 +716,7 @@ does not verify real authentication or VCF 9 specifics. See
 | [REQUIREMENTS-MATRIX.md](docs/REQUIREMENTS-MATRIX.md) | The authoritative requirement list, with explicit confidence and flags. **Start here.** |
 | [CHECK-TAXONOMY.md](docs/CHECK-TAXONOMY.md) | The three check classes and what each may assume |
 | [CONTRIBUTING.md](docs/CONTRIBUTING.md) | Conventions, known debt, open questions |
-| [test-coverage.md](docs/test-coverage.md) | Testing tiers; what needs a live lab |
+| [unit-test-coverage.md](docs/unit-test-coverage.md) | Testing tiers; what needs a live lab |
 | [ADR/](docs/ADR/) | One record per significant architectural decision |
 | [CHANGELOG.md](CHANGELOG.md) | What changed |
 

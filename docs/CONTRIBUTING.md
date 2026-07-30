@@ -158,8 +158,8 @@ runtime.
   scrubbed by a committed script
 - Anything needing a live lab is `//go:build integration` and never runs in CI
 
-See [test-coverage.md](test-coverage.md) for the full tiering and the current
-gaps.
+See [unit-test-coverage.md](unit-test-coverage.md) for the full tiering and
+the current gaps.
 
 ```bash
 make check             # fmt + vet + test

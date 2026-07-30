@@ -50,4 +50,4 @@ Supporting decisions:
   baseline when checks errored.
 - **Untested today:** `WriteBaseline`'s ordering guarantee is load-bearing and
   has no round-trip test. Listed as a known gap in
-  [test-coverage.md](../test-coverage.md).
+  [unit-test-coverage.md](../unit-test-coverage.md).

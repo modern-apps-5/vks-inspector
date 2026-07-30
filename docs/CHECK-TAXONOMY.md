@@ -203,7 +203,7 @@ credentialed check when run without credentials would be unusable in the field
 situation it is designed for.
 
 **3. Every lab response gets recorded as a fixture.** This is how class (b)
-becomes CI-testable at all. See [test-coverage.md](test-coverage.md).
+becomes CI-testable at all. See [unit-test-coverage.md](unit-test-coverage.md).
 
 ---
 
