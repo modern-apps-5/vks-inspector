@@ -81,6 +81,7 @@ Cross-compile for other platforms:
 ```bash
 make release        # dist/ for linux+darwin (amd64/arm64) and windows/amd64
 ```
+Binaries will be built in the ./dist/ folder with the suffix for the platform such as -linux-amd64 or -windows-amd64.  You can move them into your executable path and rename the binary to just vksinspect.
 
 Check the build works without touching any real environment:
 
